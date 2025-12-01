@@ -44,22 +44,17 @@ type ProxyMessage =
 
 fun ProxyStorage.close(mutate self, queryId: uint64, sendExcessesTo: address, toLeaveOnBalance: coins) {
     if (self.state == proxy_state_normal) {
-        val params = self.params.load();
-
         reserveToncoinsOnBalance(toLeaveOnBalance, 0);
         sendExcesses(sendExcessesTo, queryId);
 
         self.state = proxy_state_closing;
-        self.unlockTs = blockchain.now() + params.proxyDelayBeforeClose;
         // balance and stake remain unchanged
     } else if (self.state == proxy_state_closing) {
-        assert (blockchain.now() >= self.unlockTs) throw ERROR_NOT_UNLOCKED_YET;
-
-        reserveToncoinsOnBalance(STORAGE_ESTIMATE, 0);
-        sendPayout(self.ownerAddress, 0, queryId, SEND_MODE_CARRY_ALL_BALANCE);
+        reserveToncoinsOnBalance(toLeaveOnBalance - self.balance - self.stake, 0);
+        sendPayout(self.ownerAddress, self.balance + self.stake, queryId, SEND_MODE_PAY_FEES_SEPARATELY);
+        sendExcesses(sendExcessesTo, queryId);
 
         self.state = proxy_state_closed;
-        self.unlockTs = 0;
         self.balance = 0;
         self.stake = 0;
     } else {
@@ -163,12 +158,7 @@ fun ProxyStorage.handleClientProxyRequest(mutate self, msg: ClientProxyRequest, 
 
     match (innerMsg) {
         ClientProxyTopUp => {
-            if (self.state == proxy_state_normal) {
-                reserveToncoinsOnBalance(toLeaveOnBalance + innerMsg.topUpCoins, 0);
-            } else {
-                reserveToncoinsOnBalance(toLeaveOnBalance, 0);
-                sendPayout(msg.ownerAddress, innerMsg.topUpCoins, msg.queryId, SEND_MODE_REGULAR);
-            }
+            reserveToncoinsOnBalance(toLeaveOnBalance + innerMsg.topUpCoins, 0);
 
             sendExcesses(innerMsg.sendExcessesTo, msg.queryId);
         },
@@ -176,21 +166,19 @@ fun ProxyStorage.handleClientProxyRequest(mutate self, msg: ClientProxyRequest, 
             return; // do not check, nothing to do here
         },
         ClientProxyRefundGranted => {
-            assert (self.state != proxy_state_closed) throw ERROR_CLOSED;
-
             reserveToncoinsOnBalance(toLeaveOnBalance - innerMsg.coins, 0);
             sendPayout(msg.ownerAddress, innerMsg.coins, msg.queryId, SEND_MODE_PAY_FEES_SEPARATELY);
 
             sendExcesses(innerMsg.sendExcessesTo, msg.queryId);
         },
         ClientProxyRefundForce => {
-            assert (self.state != proxy_state_closed) throw ERROR_CLOSED;
-
             var coinsToRefund = innerMsg.coins;
-            if (coinsToRefund > self.stake) {
-                coinsToRefund = self.stake;
+            if (self.state != proxy_state_closed) {
+              if (coinsToRefund > self.stake) {
+                  coinsToRefund = self.stake;
+              }
+              self.stake = self.stake - coinsToRefund;
             }
-            self.stake = self.stake - coinsToRefund;
 
             reserveToncoinsOnBalance(toLeaveOnBalance - coinsToRefund, 0);
             sendPayout(msg.ownerAddress, coinsToRefund, msg.queryId, SEND_MODE_PAY_FEES_SEPARATELY);

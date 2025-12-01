@@ -17,7 +17,7 @@ describe('CocoonRoot - Comprehensive', () => {
         proxyCode = await compile('CocoonProxy');
         workerCode = await compile('CocoonWorker');
         clientCode = await compile('CocoonClient');
-    });
+    }, 60000);
 
     let blockchain: Blockchain;
     let deployer: SandboxContract<TreasuryContract>;
@@ -55,14 +55,15 @@ describe('CocoonRoot - Comprehensive', () => {
             deploy: true,
             success: true,
         });
-    });
+    }, 60000);
 
     describe('Hash Management - Parameterized Tests', () => {
         describe('Worker Hash Management', () => {
             it('should add worker hash and return excesses', async () => {
                 const hash = createTestHash(1);
-                const dataBefore = await cocoonRoot.getData();
-
+                const dataBefore = await cocoonRoot.getAllParams();
+                expect(dataBefore !== null).toBe(true);
+                  
                 const result = await cocoonRoot.sendAddWorkerType(deployer.getSender(), hash);
 
                 expect(result.transactions).toHaveTransaction({
@@ -72,8 +73,9 @@ describe('CocoonRoot - Comprehensive', () => {
                 });
                 assertExcessesSent(result, deployer.address);
 
-                const dataAfter = await cocoonRoot.getData();
-                expect(dataAfter.version).toBe(dataBefore.version + 1);
+                const dataAfter = await cocoonRoot.getAllParams();
+                expect(dataAfter !== null).toBe(true);
+                expect(dataAfter!.version).toBe(dataBefore!.version + 1);
 
                 const isValid = await cocoonRoot.getWorkerHashIsValid(hash);
                 expect(isValid).toBe(true);
@@ -501,7 +503,8 @@ describe('CocoonRoot - Comprehensive', () => {
 
         it('should change owner', async () => {
             const newOwner = await blockchain.treasury('newOwner');
-            const dataBefore = await cocoonRoot.getData();
+            const dataBefore = await cocoonRoot.getAllParams();
+            expect(dataBefore !== null).toBe(true);
 
             const result = await cocoonRoot.sendChangeOwner(deployer.getSender(), newOwner.address);
 
@@ -511,9 +514,10 @@ describe('CocoonRoot - Comprehensive', () => {
             });
             assertExcessesSent(result, deployer.address);
 
-            const dataAfter = await cocoonRoot.getData();
-            expect(dataAfter.version).toBe(dataBefore.version + 1);
-            expect(dataAfter.ownerAddress.toString()).toBe(newOwner.address.toString());
+            const dataAfter = await cocoonRoot.getAllParams();
+            expect(dataAfter !== null).toBe(true);
+            expect(dataAfter!.version).toBe(dataBefore!.version + 1);
+            expect(dataAfter!.owner_address.toString()).toBe(newOwner.address.toString());
         });
 
         it('should reject change owner from non-owner', async () => {
@@ -542,23 +546,6 @@ describe('CocoonRoot - Comprehensive', () => {
             await cocoonRoot.sendAddProxyInfo(deployer.getSender(), createProxyInfo('proxy2.com'));
             const seqno3 = await cocoonRoot.getLastProxySeqno();
             expect(seqno3).toBe(2);
-        });
-
-        it('should return complete get_cocoon_data', async () => {
-            const data = await cocoonRoot.getData();
-
-            // get_cocoon_data returns: (version, last_proxy_seqno, params_version, unique_id, is_test,
-            //   price_per_token, worker_fee_per_token, min_proxy_stake, min_client_stake, owner_address)
-            expect(data.version).toBe(1);
-            expect(data.lastProxySeqno).toBe(0);
-            expect(data.paramsVersion).toBe(1);
-            expect(data.uniqueId).toBe(12345);
-            expect(data.isTest).toBe(1);
-            expect(data.pricePerToken).toBe(Number(toNano('0.001')));
-            expect(data.workerFeePerToken).toBe(Number(toNano('0.0001')));
-            expect(data.minProxyStake).toBe(Number(toNano('1.0')));
-            expect(data.minClientStake).toBe(Number(toNano('1.0')));
-            expect(data.ownerAddress.toString()).toBe(deployer.address.toString());
         });
 
         it('should return complete get_cur_params', async () => {

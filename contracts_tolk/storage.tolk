@@ -73,9 +73,9 @@ fun CocoonParams.withoutCode(self): CocoonParams {
 
 struct RootData {
     proxyHashes: dict
-    workerHashes: dict
-    lastProxySeqno: uint32
     registeredProxies: dict
+    lastProxySeqno: uint32
+    workerHashes: dict
     modelHashes: dict
 }
 

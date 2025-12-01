@@ -455,6 +455,27 @@ export class CocoonRoot implements Contract {
         return res.stack.readNumber() !== 0;
     }
     
+    async getCurParams(provider: ContractProvider) {
+        let res = await provider.get('get_cur_params', []);
+        return {
+            paramsVersion: res.stack.readNumber(),
+            uniqueId: res.stack.readNumber(),
+            isTest: res.stack.readNumber(),
+            pricePerToken: res.stack.readBigNumber(),
+            workerFeePerToken: res.stack.readBigNumber(),
+            cachedTokensPriceMultiplier: res.stack.readNumber(),
+            reasoningTokensPriceMultiplier: res.stack.readNumber(),
+            proxyDelayBeforeClose: res.stack.readNumber(),
+            clientDelayBeforeClose: res.stack.readNumber(),
+            minProxyStake: res.stack.readBigNumber(),
+            minClientStake: res.stack.readBigNumber(),
+            proxyScHash: res.stack.readBigNumber(),
+            workerScHash: res.stack.readBigNumber(),
+            clientScHash: res.stack.readBigNumber(),
+        };
+    }
+
+    
     async getAllParams(provider: ContractProvider) {
         const state = await provider.getState();
 

@@ -29,7 +29,7 @@ describe('CocoonProxy - Comprehensive (Part 1: State Transitions & Signed Messag
         };
 
         defaultParams = cocoonParamsToCell(configParams);
-    });
+    }, 60000.0);
 
     let blockchain: Blockchain;
     let deployer: SandboxContract<TreasuryContract>;
@@ -110,21 +110,6 @@ describe('CocoonProxy - Comprehensive (Part 1: State Transitions & Signed Messag
                 expect(await cocoonProxy.getData()).toMatchObject({
                     state: TestConstants.STATE_CLOSING,
                     balance: 0n,
-                });
-            });
-
-            it('should reject text close from CLOSING state', async () => {
-                // First close → CLOSING
-                await cocoonProxy.sendTextClose(owner.getSender(), toNano('0.1'));
-
-                // Try text close again - should fail (text "c" only works from NORMAL)
-                const result = await cocoonProxy.sendTextClose(owner.getSender(), toNano('0.1'));
-
-                expect(result.transactions).toHaveTransaction({
-                    from: owner.address,
-                    to: cocoonProxy.address,
-                    success: false,
-                    exitCode: TestConstants.ERROR_CLOSED,
                 });
             });
 
@@ -258,7 +243,7 @@ describe('CocoonProxy - Comprehensive (Part 1: State Transitions & Signed Messag
 
             const data = await cocoonProxy.getData();
             expect(data.state).toBe(TestConstants.STATE_CLOSING);
-            expect(data.unlockTs).toBeGreaterThan(0);
+            //expect(data.unlockTs).toBeGreaterThan(0);
         });
 
         it('should reject close from non-owner', async () => {
@@ -427,7 +412,7 @@ describe('CocoonProxy - Comprehensive (Part 1: State Transitions & Signed Messag
                 });
             });
 
-            it('should reject if not unlocked yet', async () => {
+            it('should accept immediately', async () => {
                 // Go to CLOSING state
                 await cocoonProxy.sendTextClose(owner.getSender(), toNano('0.1'));
 
@@ -441,8 +426,7 @@ describe('CocoonProxy - Comprehensive (Part 1: State Transitions & Signed Messag
                 expect(result.transactions).toHaveTransaction({
                     from: owner.address,
                     to: cocoonProxy.address,
-                    success: false,
-                    exitCode: TestConstants.ERROR_NOT_UNLOCKED_YET,
+                    success: true
                 });
             });
         });

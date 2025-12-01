@@ -17,7 +17,7 @@ describe('CocoonRoot', () => {
         proxyCode = await compile('CocoonProxy');
         workerCode = await compile('CocoonWorker');
         clientCode = await compile('CocoonClient');
-    });
+    }, 60000);
 
     let blockchain: Blockchain;
     let deployer: SandboxContract<TreasuryContract>;
@@ -79,12 +79,13 @@ describe('CocoonRoot', () => {
     });
 
     it('should get cocoon data', async () => {
-        const data = await cocoonRoot.getData();
-        expect(data.version).toBe(1);
-        expect(data.lastProxySeqno).toBe(0);
-        expect(data.paramsVersion).toBe(1);
-        expect(data.uniqueId).toBe(12345);
-        expect(data.isTest).toBe(1); // is_test (true = 1)
+        const data = await cocoonRoot.getAllParams();
+        expect(data !== null).toBe(true);
+        expect(data!.version).toBe(1);
+        expect(data!.last_proxy_seqno).toBe(0);
+        expect(data!.params.params_version).toBe(1);
+        expect(data!.params.unique_id).toBe(12345);
+        expect(data!.params.is_test).toBe(true); // is_test (true = 1)
     });
 
     it('should add proxy type', async () => {
@@ -517,10 +518,11 @@ describe('CocoonRoot', () => {
         const seqno = await cocoonRoot.getLastProxySeqno();
         expect(seqno).toBe(999);
         
-        const data = await cocoonRoot.getData();
-        expect(data.paramsVersion).toBe(2);
-        expect(data.uniqueId).toBe(54321);
-        expect(data.isTest).toBe(0); // is_test (false = 0)
+        const data = await cocoonRoot.getAllParams();
+        expect(data !== null).toBe(true);
+        expect(data!.params.params_version).toBe(2);
+        expect(data!.params.unique_id).toBe(54321);
+        expect(data!.params.is_test).toBe(false); // is_test (false = 0)
     });
 
     describe('Getter methods', () => {

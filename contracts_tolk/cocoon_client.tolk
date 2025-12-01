@@ -148,7 +148,7 @@ fun onInternalMessage(in: InMessage) {
             storage.handleSignedClientMessage(in.body, in.valueCoins, constData, toLeaveOnBalance);
         },
         ExtClientTopUp => {
-            assert (storage.state != client_state_closed) throw ERROR_CLOSED;
+            assert (storage.state == client_state_normal) throw ERROR_CLOSED;
             assert (msg.topUpAmount + COMMISSION_ESTIMATE <= in.valueCoins) throw ERROR_LOW_MSG_VALUE;
             assert (msg.topUpAmount + COMMISSION_ESTIMATE + toLeaveOnBalance <= contract.getOriginalBalance()) throw ERROR_LOW_SMC_BALANCE;
 

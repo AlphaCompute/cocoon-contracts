@@ -128,7 +128,7 @@
     slice send_excesses_to = in_msg_body~load_msg_addr();
     in_msg_body.end_parse();
 
-    throw_if(error::closed, state == client_state_closed);
+    throw_if(error::closed, state != client_state_normal);
     throw_unless(error::low_msg_value, top_up_amount + COMMISSION_ESTIMATE <= msg_value);
     throw_unless(error::low_smc_balance, top_up_amount + COMMISSION_ESTIMATE + to_leave_on_balance <= my_balance);
 
