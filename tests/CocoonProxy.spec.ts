@@ -2,6 +2,7 @@ import { Blockchain, SandboxContract, TreasuryContract } from '@ton/sandbox';
 import { Address, beginCell, Cell, toNano } from '@ton/core';
 import { CocoonProxy } from '../wrappers/CocoonProxy';
 import { CocoonParams, cocoonParamsToCell } from '../wrappers/CocoonRoot';
+import { createDefaultParams, createTestHash, TestConstants, createProxyInfo } from './helpers/fixtures';
 import '@ton/test-utils';
 import { compile } from '@ton/blueprint';
 
@@ -36,28 +37,15 @@ describe('CocoonProxy', () => {
         deployer = await blockchain.treasury('deployer');
         owner = await blockchain.treasury('owner');
         root = await blockchain.treasury('root');
-            
+
         const configParams : CocoonParams = {
-          struct_version: 3,
-          params_version: 2,
-          unique_id: 54321,
-          is_test: false,
-          price_per_token: toNano('0.005'),
-          worker_fee_per_token: toNano('0.0005'),
-          prompt_tokens_price_multiplier: 21000,
-          cached_tokens_price_multiplier: 22000,
-          completion_tokens_price_multiplier: 23000,
-          reasoning_tokens_price_multiplier: 24000,
-          proxy_delay_before_close : 7200,
-          client_delay_before_close: 7200,
-          min_proxy_stake: toNano(5),
-          min_client_stake: toNano(5),
+          ...createDefaultParams(),
           proxy_sc_code: null,
           worker_sc_code: workerCode,
-          client_sc_code: clientCode 
+          client_sc_code: clientCode,
         };
 
-        defaultParams = cocoonParamsToCell(configParams); 
+        defaultParams = cocoonParamsToCell(configParams);
 
         cocoonProxy = blockchain.openContract(
             CocoonProxy.createFromConfig(
@@ -204,7 +192,7 @@ describe('CocoonProxy', () => {
             });
 
             const data = await cocoonProxy.getData();
-            
+
             expect(data.stake).toBe(toNano('2')); // Correctly updates stake (1 initial + 1 added)
             expect(data.balance).toBe(toNano('0')); // Balance remains 0
         });

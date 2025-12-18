@@ -26,6 +26,30 @@ export function createProxyInfoValue() {
     };
 }
 
+export type PublicKeyInfo = {
+  type: number;
+  expire_at : number;
+};
+
+export function createPublicKeyInfoValue() {
+    return {
+        serialize: (src : PublicKeyInfo, builder : Builder) => {
+            builder.storeUint(src.type, 8);
+            builder.storeUint(src.expire_at, 32);
+        },
+        parse: (src : Slice) => {
+            const type = src.loadUint(8);
+            const expire_at = src.loadUint(32);
+            //src.endParse();
+            const res : PublicKeyInfo = {
+              type: type,
+              expire_at: expire_at
+            };
+            return res;
+        }
+    };
+}
+
 export type CocoonParams = {
   struct_version: number;
   params_version: number;
@@ -81,9 +105,9 @@ export function cocoonParamsToCell(params: CocoonParams): Cell {
               .storeMaybeRef(params.worker_sc_code)
               .storeMaybeRef(params.client_sc_code)
               .endCell();
-    } else if (params.struct_version == 3) {
+    } else if (params.struct_version == 3 || params.struct_version == 4) {
       return beginCell()
-              .storeUint(3, 8)
+              .storeUint(params.struct_version, 8)
               .storeUint(params.params_version, 32)
               .storeUint(params.unique_id, 32)
               .storeBit(params.is_test)
@@ -114,7 +138,10 @@ export type CocoonRootConfig = {
   worker_hashes: Dictionary<bigint, BitString>;
   model_hashes: Dictionary<bigint, BitString>;
   version: number;
-  params: CocoonParams
+  params: CocoonParams;
+  public_keys: Dictionary<bigint, PublicKeyInfo>;
+  key_manager_public_key: bigint;
+  key_manager_net_addr: ProxyInfo;
 };
 
 
@@ -127,12 +154,29 @@ export function cocoonRootConfigToCell(config: CocoonRootConfig): Cell {
            .storeDict(config.model_hashes)
            .endCell();
 
-    return beginCell()
-           .storeAddress(config.owner_address)
-           .storeUint(config.version, 32)
-           .storeRef(data)
-           .storeRef(cocoonParamsToCell(config.params))
-           .endCell();
+    const paramsCell = cocoonParamsToCell(config.params);
+
+    if (config.params.struct_version <= 3) {
+        return beginCell()
+               .storeAddress(config.owner_address)
+               .storeUint(config.version, 32)
+               .storeRef(data)
+               .storeRef(paramsCell)
+               .endCell();
+    } else {
+        const builder = beginCell()
+               .storeDict(config.public_keys)
+               .storeUint(config.key_manager_public_key, 256);
+        createProxyInfoValue().serialize(config.key_manager_net_addr, builder);
+        const keyManagerCell = builder.endCell();
+        return beginCell()
+               .storeAddress(config.owner_address)
+               .storeUint(config.version, 32)
+               .storeRef(data)
+               .storeRef(paramsCell)
+               .storeRef(keyManagerCell)
+               .endCell();
+    }
 }
 
 export class CocoonRoot implements Contract {
@@ -203,7 +247,7 @@ export class CocoonRoot implements Contract {
             value: toNano("0.01"),
         });
     }
-    
+
     static delWorkerTypeMessage(workerHash: Buffer) {
       return beginCell()
           .storeUint(0x8d94a79a, 32)
@@ -219,7 +263,7 @@ export class CocoonRoot implements Contract {
             value: toNano("0.01"),
         });
     }
-    
+
     static addModelTypeMessage(modelHash: Buffer) {
       return beginCell()
           .storeUint(0xc146134d, 32)
@@ -235,7 +279,7 @@ export class CocoonRoot implements Contract {
             value: toNano("0.01"),
         });
     }
-    
+
     static delModelTypeMessage(modelHash: Buffer) {
       return beginCell()
           .storeUint(0x92b11c18, 32)
@@ -251,7 +295,7 @@ export class CocoonRoot implements Contract {
             value: toNano("0.01"),
         });
     }
-    
+
     static addProxyInfoMessage(proxyAddress: string) {
       return beginCell()
           .storeUint(0x927c7cb5, 32)
@@ -269,12 +313,12 @@ export class CocoonRoot implements Contract {
             value: toNano("0.01"),
         });
     }
-    
+
     static delProxyInfoMessage(proxySeqno: number) {
       return beginCell()
           .storeUint(0x6d49eaf2, 32)
           .storeInt(0, 64)
-          .storeInt(proxySeqno, 32)           
+          .storeInt(proxySeqno, 32)
           .endCell();
     }
 
@@ -285,7 +329,7 @@ export class CocoonRoot implements Contract {
             value: toNano("0.01"),
         });
     }
-    
+
     static updateProxyInfoMessage(proxySeqno: number, proxyAddress: string) {
       return beginCell()
           .storeUint(0x9c7924ba, 32)
@@ -301,6 +345,24 @@ export class CocoonRoot implements Contract {
         await provider.internal(via, {
             sendMode: SendMode.PAY_GAS_SEPARATELY,
             body: CocoonRoot.updateProxyInfoMessage(proxySeqno, proxyAddress),
+            value: toNano("0.01"),
+        });
+    }
+
+    static addPublicKeyMessage(publicKey: Buffer, keyType: number, expireAt: number) {
+      return beginCell()
+          .storeUint(0x6e5a646a, 32)
+          .storeInt(0, 64)
+          .storeBuffer(publicKey, 32)
+          .storeUint(keyType, 8)
+          .storeUint(expireAt, 32)
+          .endCell();
+    }
+
+    async sendAddPublicKey(provider: ContractProvider, via: Sender, publicKey: Buffer, keyType: number, expireAt: number) {
+        await provider.internal(via, {
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: CocoonRoot.addPublicKeyMessage(publicKey, keyType, expireAt),
             value: toNano("0.01"),
         });
     }
@@ -355,7 +417,7 @@ export class CocoonRoot implements Contract {
             value: toNano("0.01"),
         });
     }
-    
+
     static changeParamsMessage(pricePerToken : bigint, workerFeePerToken : bigint, proxyDelayBeforeClose : number, clientDelayBeforeClose : number, minProxyStake : bigint, minClientStake : bigint) {
       return beginCell()
           .storeUint(0x022fa189, 32)
@@ -389,6 +451,25 @@ export class CocoonRoot implements Contract {
         await provider.internal(via, {
             sendMode: SendMode.PAY_GAS_SEPARATELY,
             body: CocoonRoot.changeOwnerMessage(newOwner),
+            value: toNano("0.01"),
+        });
+    }
+
+    static changeKeyManagerMessage(newPublicKey : Buffer, newAddress : ProxyInfo) {
+      let c =  beginCell()
+          .storeUint(0xb01c0fe9, 32)
+          .storeInt(0, 64)
+          .storeBuffer(newPublicKey, 32)
+
+      createProxyInfoValue().serialize(newAddress, c);
+
+      return c.endCell();
+    }
+
+    async sendChangeKeyManager(provider: ContractProvider, via: Sender, newPublicKey : Buffer, newAddress : ProxyInfo) {
+        await provider.internal(via, {
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: CocoonRoot.changeKeyManagerMessage(newPublicKey, newAddress),
             value: toNano("0.01"),
         });
     }
@@ -454,7 +535,14 @@ export class CocoonRoot implements Contract {
         ]);
         return res.stack.readNumber() !== 0;
     }
-    
+
+    async getPublicKeyIsValid(provider: ContractProvider, hash: Buffer) {
+        let res = await provider.get('public_key_is_valid', [
+            { type: 'int', value: BigInt('0x' + hash.toString('hex')) }
+        ]);
+        return res.stack.readNumber() !== 0;
+    }
+
     async getCurParams(provider: ContractProvider) {
         let res = await provider.get('get_cur_params', []);
         return {
@@ -475,18 +563,18 @@ export class CocoonRoot implements Contract {
         };
     }
 
-    
+
     async getAllParams(provider: ContractProvider) {
         const state = await provider.getState();
 
         if (state.state.type == 'uninit') {
-          return null; 
+          return null;
         }
         if (state.state.type == 'frozen') {
-          return null; 
+          return null;
         }
         if (!state.state.data) {
-          return null; 
+          return null;
         }
 
         const cell = Cell.fromBoc(state.state.data)[0];
@@ -494,19 +582,18 @@ export class CocoonRoot implements Contract {
         const cs = cell.beginParse();
 
         const ownerAddress = cs.loadAddress();
-        
+
         const data = cs.loadRef().beginParse();
         const proxyHashes = data.loadDict<bigint, BitString>(Dictionary.Keys.BigUint(256), Dictionary.Values.BitString(0));
-        const registredProxies = data.loadDict<number, ProxyInfo>(Dictionary.Keys.Uint(32), createProxyInfoValue()); 
+        const registredProxies = data.loadDict<number, ProxyInfo>(Dictionary.Keys.Uint(32), createProxyInfoValue());
         const lastProxySeqno = data.loadUint(32);
-        const workerHashes = data.loadDict<bigint, BitString>(Dictionary.Keys.BigUint(256), Dictionary.Values.BitString(0)); 
-        const modelHashes = data.loadDict<bigint, BitString>(Dictionary.Keys.BigUint(256), Dictionary.Values.BitString(0)); 
+        const workerHashes = data.loadDict<bigint, BitString>(Dictionary.Keys.BigUint(256), Dictionary.Values.BitString(0));
+        const modelHashes = data.loadDict<bigint, BitString>(Dictionary.Keys.BigUint(256), Dictionary.Values.BitString(0));
         data.endParse();
-          
+
         const version = cs.loadUint(32);
-          
+
         const pcs = cs.loadRef().beginParse();
-        cs.endParse();
 
         const structVersion = pcs.loadUint(8);
         const paramsVersion = pcs.loadUint(32);
@@ -545,6 +632,22 @@ export class CocoonRoot implements Contract {
         const clientScCode = pcs.loadRef();
         pcs.endParse();
 
+        let publicKeys : Dictionary<bigint, PublicKeyInfo> = Dictionary.empty(null, null);
+        let keyManagerPublicKey = BigInt(0);
+        let keyManagerNetAddr : ProxyInfo = {
+          addr : ""
+        };
+
+        if (structVersion >= 4) {
+          let pkcs = cs.loadRef().beginParse();
+
+          publicKeys = pkcs.loadDict<bigint, PublicKeyInfo>(Dictionary.Keys.BigUint(256), createPublicKeyInfoValue());
+          keyManagerPublicKey = pkcs.loadUintBig(256);
+          keyManagerNetAddr = createProxyInfoValue().parse(pkcs);
+        }
+
+        cs.endParse();
+
         const params : CocoonParams = {
           struct_version: structVersion,
           params_version: paramsVersion,
@@ -562,7 +665,7 @@ export class CocoonRoot implements Contract {
           min_client_stake: minClientStake,
           proxy_sc_code: proxyScCode,
           worker_sc_code: workerScCode,
-          client_sc_code: clientScCode 
+          client_sc_code: clientScCode
         };
 
         const conf : CocoonRootConfig = {
@@ -573,9 +676,12 @@ export class CocoonRoot implements Contract {
           worker_hashes: workerHashes,
           model_hashes: modelHashes,
           version: version,
-          params: params
+          params: params,
+          public_keys: publicKeys,
+          key_manager_public_key: keyManagerPublicKey,
+          key_manager_net_addr: keyManagerNetAddr
         };
 
-        return conf; 
+        return conf;
     }
 }

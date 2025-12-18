@@ -9,10 +9,10 @@ import {promptUrl, promptAddress, promptToncoin, promptUserFriendlyAddress, asse
 
 const clientWithdraw = async(provider:NetworkProvider, ui:UIProvider) => {
     const isTestnet = provider.network() !== 'mainnet';
-    
+
     const clientWalletAddress : Address = await promptAddress("Enter the address of the client wallet contract:", ui);
     const clientProxyScAddress : Address = await promptAddress("Enter the address of the client proxy smartcontract:", ui);
-      
+
     const msg = beginCell()
           .storeUint(0xda068e78, 32)
           .storeInt(0, 64)
@@ -25,10 +25,10 @@ const clientWithdraw = async(provider:NetworkProvider, ui:UIProvider) => {
 
 const clientRequestRefund = async(provider:NetworkProvider, ui:UIProvider) => {
     const isTestnet = provider.network() !== 'mainnet';
-    
+
     const clientWalletAddress : Address = await promptAddress("Enter the address of the client wallet contract:", ui);
     const clientProxyScAddress : Address = await promptAddress("Enter the address of the client proxy smartcontract:", ui);
-      
+
     const msg = beginCell()
           .storeUint(0xfafa6cc1, 32)
           .storeInt(0, 64)
@@ -40,7 +40,7 @@ const clientRequestRefund = async(provider:NetworkProvider, ui:UIProvider) => {
 };
 
 
-const actionList = [ 'clientWithdraw', 
+const actionList = [ 'clientWithdraw',
                      'clientRequestRefund',
                      'Quit' ];
 
@@ -51,7 +51,7 @@ export async function run(provider: NetworkProvider) {
     const workerCode = await compile('CocoonWorker');
     const clientCode = await compile('CocoonClient');
     const proxyCode = await compile('CocoonProxy');
-   
+
 
     let done = false;
     do {

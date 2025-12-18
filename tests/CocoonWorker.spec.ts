@@ -5,7 +5,7 @@ import { CocoonParams, cocoonParamsToCell } from '../wrappers/CocoonRoot';
 import '@ton/test-utils';
 import { compile } from '@ton/blueprint';
 import { sign, KeyPair, keyPairFromSeed, getSecureRandomBytes } from '@ton/crypto';
-import { createParamsCell } from './helpers/fixtures';
+import { createDefaultParams, createTestHash, TestConstants, createProxyInfo } from './helpers/fixtures';
 
 describe('CocoonWorker', () => {
     let code: Cell;
@@ -17,28 +17,15 @@ describe('CocoonWorker', () => {
         // Create keypair for signed message tests
         const seed = await getSecureRandomBytes(32);
         keyPair = keyPairFromSeed(seed);
-        
+
         const configParams : CocoonParams = {
-          struct_version: 3,
-          params_version: 2,
-          unique_id: 54321,
-          is_test: false,
-          price_per_token: toNano('0.005'),
-          worker_fee_per_token: toNano('0.0005'),
-          prompt_tokens_price_multiplier: 21000,
-          cached_tokens_price_multiplier: 22000,
-          completion_tokens_price_multiplier: 23000,
-          reasoning_tokens_price_multiplier: 24000,
-          proxy_delay_before_close : 7200,
-          client_delay_before_close: 7200,
-          min_proxy_stake: toNano(1),
-          min_client_stake: toNano(1),
+          ...createDefaultParams(),
           proxy_sc_code: null,
           worker_sc_code: null,
-          client_sc_code:  null 
+          client_sc_code: null,
         };
 
-        defaultParams = cocoonParamsToCell(configParams); 
+        defaultParams = cocoonParamsToCell(configParams);
     });
 
     let blockchain: Blockchain;
@@ -48,7 +35,7 @@ describe('CocoonWorker', () => {
     beforeEach(async () => {
         blockchain = await Blockchain.create();
         deployer = await blockchain.treasury('deployer');
-        
+
         const dummyProxy = await blockchain.treasury('proxy');
 
         cocoonWorker = blockchain.openContract(CocoonWorker.createFromConfig({
@@ -95,7 +82,7 @@ describe('CocoonWorker', () => {
 
     it('should ignore do_not_process opcode', async () => {
         const DO_NOT_PROCESS = 0x9a1247c0;
-        
+
         const result = await deployer.send({
             to: cocoonWorker.address,
             value: toNano('0.1'),
@@ -131,17 +118,17 @@ describe('CocoonWorker', () => {
     it('should have correct contract address determinism', async () => {
         const testOwner = await blockchain.treasury('test-owner');
         const testProxy = await blockchain.treasury('test-proxy');
-        
+
         const config = {
             ownerAddress: testOwner.address,
             proxyAddress: testProxy.address,
             proxyPublicKey: 12345n,
             params: defaultParams,
         };
-        
+
         const worker1 = CocoonWorker.createFromConfig(config, code);
         const worker2 = CocoonWorker.createFromConfig(config, code);
-        
+
         expect(worker1.address.toString()).toBe(worker2.address.toString());
     });
 
@@ -155,7 +142,7 @@ describe('CocoonWorker', () => {
     // 3. Message structure follows Tolk patterns
     // For full integration tests, you would need to deploy contracts via
     // the full system (Root -> Proxy -> Worker hierarchy)
-    
+
     describe('Signed Payout Requests', () => {
         let initializedWorker: SandboxContract<CocoonWorker>;
         let proxy: SandboxContract<TreasuryContract>;
@@ -164,30 +151,17 @@ describe('CocoonWorker', () => {
         beforeEach(async () => {
             owner = await blockchain.treasury('owner');
             proxy = await blockchain.treasury('proxy');
-            
+
             // Create params cell (minimal for testing)
             const configParams : CocoonParams = {
-              struct_version: 3,
-              params_version: 2,
-              unique_id: 54321,
-              is_test: false,
-              price_per_token: toNano('0.005'),
-              worker_fee_per_token: toNano('0.0005'),
-              prompt_tokens_price_multiplier: 21000,
-              cached_tokens_price_multiplier: 22000,
-              completion_tokens_price_multiplier: 23000,
-              reasoning_tokens_price_multiplier: 24000,
-              proxy_delay_before_close : 7200,
-              client_delay_before_close: 7200,
-              min_proxy_stake: toNano(1),
-              min_client_stake: toNano(1),
+              ...createDefaultParams(),
               proxy_sc_code: null,
               worker_sc_code: null,
-              client_sc_code:  null 
+              client_sc_code:  null
             };
 
-            const paramsCell = cocoonParamsToCell(configParams); 
-            
+            const paramsCell = cocoonParamsToCell(configParams);
+
             // Use proper config pattern like CocoonRoot
             const workerConfig = {
                 ownerAddress: owner.address,
@@ -195,15 +169,15 @@ describe('CocoonWorker', () => {
                 proxyPublicKey: BigInt('0x' + Buffer.from(keyPair.publicKey).toString('hex')),
                 params: paramsCell,
             };
-            
+
             // Create worker with proper config
             initializedWorker = blockchain.openContract(
                 CocoonWorker.createFromConfig(workerConfig, code)
             );
-            
+
             // Deploy
             const deployResult = await initializedWorker.sendDeploy(owner.getSender(), toNano('0.5'));
-            
+
             expect(deployResult.transactions).toHaveTransaction({
                 from: owner.address,
                 to: initializedWorker.address,
@@ -216,7 +190,7 @@ describe('CocoonWorker', () => {
             const OP_PAYOUT_SIGNED = 0xa040ad28;
             const queryId = 123;
             const newTokens = 1000n;
-            
+
             const signature = sign(
                 beginCell()
                     .storeUint(OP_PAYOUT_SIGNED, 32)
@@ -227,7 +201,7 @@ describe('CocoonWorker', () => {
                     .hash(),
                 keyPair.secretKey
             );
-            
+
             const result = await initializedWorker.sendSignedPayout(
                 owner.getSender(),
                 OP_PAYOUT_SIGNED,
@@ -238,14 +212,14 @@ describe('CocoonWorker', () => {
                 signature,
                 toNano('0.2')
             );
-            
+
             // Worker should process successfully
             expect(result.transactions).toHaveTransaction({
                 from: owner.address,
                 to: initializedWorker.address,
                 success: true,
             });
-            
+
             // Worker should send WorkerProxyRequest to proxy
             expect(result.transactions).toHaveTransaction({
                 from: initializedWorker.address,
@@ -258,11 +232,11 @@ describe('CocoonWorker', () => {
             const OP_PAYOUT_SIGNED = 0xa040ad28;
             const queryId = 123;
             const newTokens = 1000n;
-            
+
             // Use wrong private key
             const wrongSeed = await getSecureRandomBytes(32);
             const wrongKeyPair = keyPairFromSeed(wrongSeed);
-            
+
             const wrongSignature = sign(
                 beginCell()
                     .storeUint(OP_PAYOUT_SIGNED, 32)
@@ -273,7 +247,7 @@ describe('CocoonWorker', () => {
                     .hash(),
                 wrongKeyPair.secretKey  // Wrong key!
             );
-            
+
             const result = await initializedWorker.sendSignedPayout(
                 owner.getSender(),
                 OP_PAYOUT_SIGNED,
@@ -284,7 +258,7 @@ describe('CocoonWorker', () => {
                 wrongSignature,
                 toNano('0.2')
             );
-            
+
             expect(result.transactions).toHaveTransaction({
                 from: owner.address,
                 to: initializedWorker.address,
@@ -297,7 +271,7 @@ describe('CocoonWorker', () => {
             const OP_LAST_PAYOUT_SIGNED = 0xf5f26a36;
             const queryId = 456;
             const newTokens = 2000n;
-            
+
             const signature = sign(
                 beginCell()
                     .storeUint(OP_LAST_PAYOUT_SIGNED, 32)
@@ -308,7 +282,7 @@ describe('CocoonWorker', () => {
                     .hash(),
                 keyPair.secretKey
             );
-            
+
             const result = await initializedWorker.sendSignedPayout(
                 owner.getSender(),
                 OP_LAST_PAYOUT_SIGNED,
@@ -319,13 +293,13 @@ describe('CocoonWorker', () => {
                 signature,
                 toNano('0.2')
             );
-            
+
             expect(result.transactions).toHaveTransaction({
                 from: owner.address,
                 to: initializedWorker.address,
                 success: true,
             });
-            
+
             // Should send WorkerProxyRequest to proxy
             expect(result.transactions).toHaveTransaction({
                 from: initializedWorker.address,
@@ -339,19 +313,19 @@ describe('CocoonWorker', () => {
             const result1 = await initializedWorker.sendPayoutRequest(
                 owner.getSender(), 123, 1000n, initializedWorker.address, owner.address, keyPair, toNano('0.2')
             );
-            
+
             // First payout should succeed
             expect(result1.transactions).toHaveTransaction({
                 from: owner.address,
                 to: initializedWorker.address,
                 success: true,
             });
-            
+
             // Try to send same token count
             const result = await initializedWorker.sendPayoutRequest(
                 owner.getSender(), 124, 1000n, initializedWorker.address, owner.address, keyPair, toNano('0.2')
             );
-            
+
             // Should fail - might be ERROR_OLD_MESSAGE (1004) or ERROR_CLOSED (1000) if state changed
             expect(result.transactions).toHaveTransaction({
                 from: owner.address,
@@ -365,7 +339,7 @@ describe('CocoonWorker', () => {
             const result = await initializedWorker.sendPayoutRequest(
                 owner.getSender(), 123, 1000n, initializedWorker.address, owner.address, keyPair, toNano('0.01')
             );
-            
+
             // Should fail - exact error depends on check order
             expect(result.transactions).toHaveTransaction({
                 from: owner.address,

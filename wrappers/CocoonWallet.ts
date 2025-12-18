@@ -47,8 +47,8 @@ export class CocoonWallet implements Contract {
             body: beginCell().endCell(),
         });
     }
-    
-    
+
+
     static buildForwardMessage(forwardTo: Address, msg: Cell) {
       const fwd_msg: Cell = beginCell()
         .storeUint(0x18, 6)
@@ -61,11 +61,11 @@ export class CocoonWallet implements Contract {
       return beginCell()
           .storeUint(0x9c69f376, 32)
           .storeInt(0, 64)
-          .storeInt(64, 8) 
+          .storeInt(64, 8)
           .storeRef(fwd_msg)
-          .endCell(); 
+          .endCell();
     }
-    
+
     async sendForwardMessage(provider: ContractProvider, via: Sender, forwardTo: Address, msg: Cell, value: bigint) {
         await provider.internal(via, {
             sendMode: SendMode.PAY_GAS_SEPARATELY,
@@ -126,13 +126,13 @@ export class CocoonWallet implements Contract {
             .storeAddress(msg.to)
             .storeCoins(msg.value)
             .storeUint(0, 1 + 4 + 4 + 64 + 32 + 1);  // empty extra fields: ihr_disabled, bounce, bounced, src, ihr_fee, fwd_fee, created_lt, created_at, init
-        
+
         if (msg.body) {
             builder.storeUint(1, 1).storeRef(msg.body);  // body as ref
         } else {
             builder.storeUint(0, 1);  // no body
         }
-        
+
         return builder.endCell();
     }
 

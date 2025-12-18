@@ -63,8 +63,8 @@ describe('CocoonWallet - Comprehensive', () => {
             expect(await cocoonWallet.getSeqno()).toBe(1);
 
             // Verify message was sent
-            expect(result.transactions).toHaveTransaction({ 
-                to: recipient.address, 
+            expect(result.transactions).toHaveTransaction({
+                to: recipient.address,
                 value: (v) => v !== undefined && v >= toNano('0.09'),
                 success: true,
             });
@@ -129,7 +129,7 @@ describe('CocoonWallet - Comprehensive', () => {
         it('should reject external message with low balance', async () => {
             // Deploy wallet with DIFFERENT keypair and low balance
             const lowBalanceKeyPair = keyPairFromSeed(await getSecureRandomBytes(32));
-            
+
             const lowBalanceWallet = blockchain.openContract(
                 CocoonWallet.createFromConfig({
                     publicKey: Buffer.from(lowBalanceKeyPair.publicKey),
@@ -165,14 +165,14 @@ describe('CocoonWallet - Comprehensive', () => {
                 on: cocoonWallet.address,
                 success: true,
             });
-            
-            expect(result.transactions).toHaveTransaction({ 
-                to: recipient1.address, 
+
+            expect(result.transactions).toHaveTransaction({
+                to: recipient1.address,
                 value: (v) => v !== undefined && v >= toNano('0.09'),
                 success: true,
             });
-            expect(result.transactions).toHaveTransaction({ 
-                to: recipient2.address, 
+            expect(result.transactions).toHaveTransaction({
+                to: recipient2.address,
                 value: (v) => v !== undefined && v >= toNano('0.19'),
                 success: true,
             });
@@ -196,7 +196,7 @@ describe('CocoonWallet - Comprehensive', () => {
                 success: true,
             });
 
-            expect(result.transactions).toHaveTransaction({ 
+            expect(result.transactions).toHaveTransaction({
                 to: recipient.address,
                 op: 0x12345678,
                 success: true,
@@ -217,7 +217,7 @@ describe('CocoonWallet - Comprehensive', () => {
                 success: true,
             });
 
-            expect(result.transactions).toHaveTransaction({ 
+            expect(result.transactions).toHaveTransaction({
                 to: recipient.address,
                 inMessageBounceable: false,
                 success: true,
@@ -305,9 +305,9 @@ describe('CocoonWallet - Comprehensive', () => {
                     to: cocoonWallet.address,
                     success: true,
                 });
-                
-                expect(result.transactions).toHaveTransaction({ 
-                    from: cocoonWallet.address, 
+
+                expect(result.transactions).toHaveTransaction({
+                    from: cocoonWallet.address,
                     to: recipient.address,
                     success: true,
                 });
@@ -356,8 +356,8 @@ describe('CocoonWallet - Comprehensive', () => {
                 expect(balanceAfter).toBeLessThan(toNano('0.05'));
 
                 // Verify message sent back
-                expect(result.transactions).toHaveTransaction({ 
-                    from: cocoonWallet.address, 
+                expect(result.transactions).toHaveTransaction({
+                    from: cocoonWallet.address,
                     to: deployer.address,
                     success: true,
                 });

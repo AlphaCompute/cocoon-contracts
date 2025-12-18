@@ -1,6 +1,6 @@
 import { Blockchain, SandboxContract, TreasuryContract } from '@ton/sandbox';
 import { Cell, toNano, Dictionary } from '@ton/core';
-import { CocoonRoot, CocoonRootConfig } from '../wrappers/CocoonRoot';
+import { CocoonRoot, CocoonRootConfig, ProxyInfo } from '../wrappers/CocoonRoot';
 import '@ton/test-utils';
 import { compile } from '@ton/blueprint';
 import { createDefaultParams, createTestHash, TestConstants, createProxyInfo } from './helpers/fixtures';
@@ -43,6 +43,11 @@ describe('CocoonRoot - Comprehensive', () => {
                 worker_sc_code: workerCode,
                 client_sc_code: clientCode,
             },
+            public_keys: Dictionary.empty(),
+            key_manager_public_key: BigInt(0),
+            key_manager_net_addr: {
+              "addr" : "localhost:14000"
+            }
         };
 
         cocoonRoot = blockchain.openContract(CocoonRoot.createFromConfig(config, code));
@@ -63,7 +68,7 @@ describe('CocoonRoot - Comprehensive', () => {
                 const hash = createTestHash(1);
                 const dataBefore = await cocoonRoot.getAllParams();
                 expect(dataBefore !== null).toBe(true);
-                  
+
                 const result = await cocoonRoot.sendAddWorkerType(deployer.getSender(), hash);
 
                 expect(result.transactions).toHaveTransaction({
@@ -456,6 +461,11 @@ describe('CocoonRoot - Comprehensive', () => {
                     worker_sc_code: workerCode,
                     client_sc_code: clientCode,
                 },
+                public_keys: Dictionary.empty(),
+                key_manager_public_key: BigInt(0),
+                key_manager_net_addr: {
+                  "addr" : "localhost:14000"
+                }
             };
 
             const result = await cocoonRoot.sendUpgradeFull(deployer.getSender(), newConfig, newCode);
@@ -531,6 +541,62 @@ describe('CocoonRoot - Comprehensive', () => {
                 success: false,
                 exitCode: TestConstants.ERROR_EXPECTED_MESSAGE_FROM_OWNER,
             });
+        });
+
+        it('should change key manager', async () => {
+            const newPublicKey = createTestHash(1001);
+            const newAddr : ProxyInfo = {
+              "addr" : "new_addr"
+            };
+
+            const dataBefore = await cocoonRoot.getAllParams();
+            expect(dataBefore !== null).toBe(true);
+
+            const result = await cocoonRoot.sendChangeKeyManager(deployer.getSender(), newPublicKey, newAddr);
+
+            expect(result.transactions).toHaveTransaction({
+                to: cocoonRoot.address,
+                success: true,
+            });
+            assertExcessesSent(result, deployer.address);
+
+            const dataAfter = await cocoonRoot.getAllParams();
+            expect(dataAfter !== null).toBe(true);
+            expect(dataAfter!.version).toBe(dataBefore!.version + 1);
+            expect(dataAfter!.key_manager_public_key).toBe(BigInt("0x" + newPublicKey.toString('hex')));
+            expect(dataAfter!.key_manager_net_addr.addr).toBe(newAddr.addr);
+        });
+
+        it('should add and automatically remove public key', async () => {
+            const publicKey1 = createTestHash(1001);
+            const publicKey2 = createTestHash(1002);
+
+            const now = Math.floor(Date.now() / 1000);
+            blockchain.now = now;
+
+            const keyType = 1;
+            const expireAt1 = now + 60;
+
+            const result1 = await cocoonRoot.sendAddPublicKey(deployer.getSender(), publicKey1, keyType, expireAt1);
+            expect(result1.transactions).toHaveTransaction({
+                to: cocoonRoot.address,
+                success: true,
+            });
+
+            expect(await cocoonRoot.getPublicKeyIsValid(publicKey1)).toBe(true);
+            expect(await cocoonRoot.getPublicKeyIsValid(publicKey2)).toBe(false);
+
+            // Advance time
+            blockchain.now = now + 3600;
+            const expireAt2 = now + 3600 + 60;
+            const result2 = await cocoonRoot.sendAddPublicKey(deployer.getSender(), publicKey2, keyType, expireAt2);
+            expect(result2.transactions).toHaveTransaction({
+                to: cocoonRoot.address,
+                success: true,
+            });
+
+            expect(await cocoonRoot.getPublicKeyIsValid(publicKey1)).toBe(false);
+            expect(await cocoonRoot.getPublicKeyIsValid(publicKey2)).toBe(true);
         });
     });
 

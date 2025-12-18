@@ -2,13 +2,14 @@
 #include "utils.fc";
 #include "opcodes.fc";
 
-(slice, cell, cell, int, cell, cell, int, cell) load_data() inline {
+(slice, cell, cell, int, cell, cell, int, cell, cell) load_data() inline {
   return unpack_cocoon_root_data(get_data().begin_parse());
 }
 
 () save_data(slice owner_address, cell proxy_hashes, cell registered_proxies, int last_proxy_seqno, cell worker_hashes,
-             cell model_hashes, int version, cell params) impure inline {
-  set_data(pack_cocoon_root_data(owner_address, proxy_hashes, registered_proxies, last_proxy_seqno, worker_hashes, model_hashes, version, params));
+             cell model_hashes, int version, cell params, cell public_keys_manager_data) impure inline {
+  set_data(pack_cocoon_root_data(owner_address, proxy_hashes, registered_proxies, last_proxy_seqno, worker_hashes, model_hashes, version,
+                                 params, public_keys_manager_data));
 }
 
 () recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
@@ -26,6 +27,7 @@
       return ();
   }
   slice sender_address = cs~load_msg_addr();
+  slice send_excesses_to = sender_address;
 
   int op = in_msg_body~load_uint(32);
   if (op == op::do_not_process) {
@@ -34,9 +36,11 @@
   int query_id = in_msg_body~load_uint(64);
 
   (slice owner_address, cell proxy_hashes, cell registered_proxies, int last_proxy_seqno, cell worker_hashes,
-   cell model_hashes, int version, cell params) = load_data();
+   cell model_hashes, int version, cell params, cell public_keys_manager_data) = load_data();
 
-  throw_unless(error::expected_message_from_owner, equal_slices_bits(sender_address, owner_address));
+  if (op != op::root_add_public_key_signed) {
+    throw_unless(error::expected_message_from_owner, equal_slices_bits(sender_address, owner_address));
+  }
 
   if (op == op::root_add_worker_type) {
 
@@ -91,9 +95,7 @@
     slice proxy_desc = in_msg_body;
 
     ;; checking validity
-    throw_unless(error::msg_format_mismatch, in_msg_body~load_uint(1) == 0);
-    int addr_len = in_msg_body~load_uint(7);
-    in_msg_body~skip_bits(addr_len * 8); ;; addr
+    slice net_addr = in_msg_body~load_cocoon_net_addr();
     in_msg_body.end_parse();
 
     last_proxy_seqno += 1;
@@ -115,22 +117,84 @@
     slice proxy_addr = in_msg_body;
 
     ;; checking validity
-    throw_unless(error::msg_format_mismatch, in_msg_body~load_uint(1) == 0);
-    int addr_len = in_msg_body~load_uint(7);
-    in_msg_body~skip_bits(addr_len * 8); ;; addr
+    slice net_addr = in_msg_body~load_cocoon_net_addr();
     in_msg_body.end_parse();
 
     (slice value, int is_found) = registered_proxies.udict_get?(32, seqno);
-    throw_if(error::unknown_proxy_type, is_found == 0); ;; canno change deleted proxy 
+    throw_if(error::unknown_proxy_type, is_found == 0); ;; canno change deleted proxy
 
     slice new_value = begin_cell().store_slice(proxy_addr).end_cell().begin_parse();
     registered_proxies~udict_set(32, seqno, new_value);
     version += 1;
 
+  } elseif (op == op::root_add_public_key_signed) {
+
+    (cell public_keys_dict, int public_keys_manager_public_key, slice public_keys_manager_net_addr) =
+        unpack_cocoon_public_keys_manager_data(public_keys_manager_data);
+
+    [slice payload, slice send_excesses_to_parsed] = signed_message_unpack_and_check_signature(in_msg_body, op, query_id, public_keys_manager_public_key);
+
+    int public_key = payload~load_uint(256);
+
+    slice pd = payload;
+    pd~load_uint(8);   ;; key type
+    int expire_at = pd~load_uint(32);
+    pd.end_parse();
+
+    throw_if(error::old_message, expire_at < now());
+
+    public_keys_dict~udict_set(256, public_key, payload);
+    int key = -1;
+    do {
+      (key, slice cs, int found) = public_keys_dict.udict_get_next?(256, key);
+      if (found) {
+        cs~load_uint(8); ;; key_type;
+        int valid_until = cs~load_uint(32);
+        if (valid_until < now()) {
+          public_keys_dict~udict_delete?(256, key);
+        }
+      }
+    } until (~ found);
+
+    version += 1;
+    send_excesses_to = send_excesses_to_parsed;
+
+    public_keys_manager_data = pack_cocoon_public_keys_manager_data(public_keys_dict, public_keys_manager_public_key, public_keys_manager_net_addr);
+
+  } elseif (op == op::root_add_public_key) {
+
+    (cell public_keys_dict, int public_keys_manager_public_key, slice public_keys_manager_net_addr) =
+        unpack_cocoon_public_keys_manager_data(public_keys_manager_data);
+
+    int public_key = in_msg_body~load_uint(256);
+    slice pd = in_msg_body;
+    pd~load_uint(8);   ;; key type
+    int expire_at = pd~load_uint(32);
+    pd.end_parse();
+
+    throw_if(error::old_message, expire_at < now());
+
+    public_keys_dict~udict_set(256, public_key, in_msg_body);
+    int key = -1;
+    do {
+      (key, slice cs, int found) = public_keys_dict.udict_get_next?(256, key);
+      if (found) {
+        cs~load_uint(8); ;; key_type;
+        int valid_until = cs~load_uint(32);
+        if (valid_until < now()) {
+          public_keys_dict~udict_delete?(256, key);
+        }
+      }
+    } until (~ found);
+
+    version += 1;
+
+    public_keys_manager_data = pack_cocoon_public_keys_manager_data(public_keys_dict, public_keys_manager_public_key, public_keys_manager_net_addr);
+
   } elseif (op == op::root_change_price) {
 
     (int params_version, int unique_id, int is_test, int price_per_token,
-     int worker_fee_per_token, int prompt_tokens_price_multiplier, int cached_tokens_price_multiplier, 
+     int worker_fee_per_token, int prompt_tokens_price_multiplier, int cached_tokens_price_multiplier,
      int completion_tokens_price_multiplier, int reasoning_tokens_price_multiplier,
      int proxy_delay_before_close, int client_delay_before_close,
      int min_proxy_stake, int min_client_stake, cell proxy_sc_code, cell worker_sc_code, cell client_sc_code) = unpack_cocoon_params(params);
@@ -142,8 +206,8 @@
     version += 1;
     params_version += 1;
 
-    params = pack_cocoon_params(params_version, unique_id, is_test, price_per_token, worker_fee_per_token, 
-                               prompt_tokens_price_multiplier, cached_tokens_price_multiplier, 
+    params = pack_cocoon_params(params_version, unique_id, is_test, price_per_token, worker_fee_per_token,
+                               prompt_tokens_price_multiplier, cached_tokens_price_multiplier,
                                completion_tokens_price_multiplier, reasoning_tokens_price_multiplier,
                                proxy_delay_before_close, client_delay_before_close,
                                min_proxy_stake, min_client_stake, proxy_sc_code, worker_sc_code, client_sc_code);
@@ -151,7 +215,7 @@
   } elseif (op == op::root_change_params) {
 
     (int params_version, int unique_id, int is_test, int price_per_token,
-     int worker_fee_per_token, int prompt_tokens_price_multiplier, int cached_tokens_price_multiplier, 
+     int worker_fee_per_token, int prompt_tokens_price_multiplier, int cached_tokens_price_multiplier,
      int completion_tokens_price_multiplier, int reasoning_tokens_price_multiplier,
      int proxy_delay_before_close, int client_delay_before_close,
      int min_proxy_stake, int min_client_stake, cell proxy_sc_code, cell worker_sc_code, cell client_sc_code) = unpack_cocoon_params(params);
@@ -167,8 +231,8 @@
     version += 1;
     params_version += 1;
 
-    params = pack_cocoon_params(params_version, unique_id, is_test, price_per_token, worker_fee_per_token, 
-                               prompt_tokens_price_multiplier, cached_tokens_price_multiplier, 
+    params = pack_cocoon_params(params_version, unique_id, is_test, price_per_token, worker_fee_per_token,
+                               prompt_tokens_price_multiplier, cached_tokens_price_multiplier,
                                completion_tokens_price_multiplier, reasoning_tokens_price_multiplier,
                                proxy_delay_before_close, client_delay_before_close,
                                min_proxy_stake, min_client_stake, proxy_sc_code, worker_sc_code, client_sc_code);
@@ -176,7 +240,7 @@
   } elseif (op == op::root_upgrade_contracts) {
 
     (int params_version, int unique_id, int is_test, int price_per_token,
-     int worker_fee_per_token, int prompt_tokens_price_multiplier, int cached_tokens_price_multiplier, 
+     int worker_fee_per_token, int prompt_tokens_price_multiplier, int cached_tokens_price_multiplier,
      int completion_tokens_price_multiplier, int reasoning_tokens_price_multiplier,
      int proxy_delay_before_close, int client_delay_before_close,
      int min_proxy_stake, int min_client_stake, cell proxy_sc_code, cell worker_sc_code, cell client_sc_code) = unpack_cocoon_params(params);
@@ -189,8 +253,8 @@
     version += 1;
     params_version += 1;
 
-    params = pack_cocoon_params(params_version, unique_id, is_test, price_per_token, worker_fee_per_token, 
-                               prompt_tokens_price_multiplier, cached_tokens_price_multiplier, 
+    params = pack_cocoon_params(params_version, unique_id, is_test, price_per_token, worker_fee_per_token,
+                               prompt_tokens_price_multiplier, cached_tokens_price_multiplier,
                                completion_tokens_price_multiplier, reasoning_tokens_price_multiplier,
                                proxy_delay_before_close, client_delay_before_close,
                                min_proxy_stake, min_client_stake, proxy_sc_code, worker_sc_code, client_sc_code);
@@ -229,65 +293,89 @@
 
     owner_address = in_msg_body~load_msg_addr();
     in_msg_body.end_parse();
-    
+
     version += 1;
+
+  } elseif (op == op::root_change_key_manager) {
+
+    (cell public_keys_dict, int public_keys_manager_public_key, slice public_keys_manager_net_addr) =
+        unpack_cocoon_public_keys_manager_data(public_keys_manager_data);
+
+    int new_public_keys_manager_public_key = in_msg_body~load_uint(256);
+    slice new_public_keys_manager_net_addr = in_msg_body~load_cocoon_net_addr();
+    in_msg_body.end_parse();
+
+    version += 1;
+    public_keys_manager_public_key = new_public_keys_manager_public_key;
+    public_keys_manager_net_addr = new_public_keys_manager_net_addr;
+
+    public_keys_manager_data = pack_cocoon_public_keys_manager_data(public_keys_dict, public_keys_manager_public_key, public_keys_manager_net_addr);
 
   } else {
     throw (error::unknown_op);
   }
 
-  forward_excesses(sender_address, query_id);
+  forward_excesses(send_excesses_to, query_id);
 
   save_data(owner_address, proxy_hashes, registered_proxies, last_proxy_seqno, worker_hashes,
-                               model_hashes, version, params);
+                               model_hashes, version, params, public_keys_manager_data);
 
   return ();
 }
 
 (int, int, int, int, int, int, int, int, int, slice) get_cocoon_data() method_id {
   (slice owner_address, cell proxy_hashes, cell registered_proxies, int last_proxy_seqno, cell worker_hashes,
-    cell model_hashes, int version, cell params) = load_data();
+    cell model_hashes, int version, cell params, cell public_keys_manager_data) = load_data();
   (int params_version, int unique_id, int is_test, int price_per_token,
-   int worker_fee_per_token, int prompt_tokens_price_multiplier, int cached_tokens_price_multiplier, 
+   int worker_fee_per_token, int prompt_tokens_price_multiplier, int cached_tokens_price_multiplier,
    int completion_tokens_price_multiplier, int reasoning_tokens_price_multiplier,
    int proxy_delay_before_close, int client_delay_before_close,
    int min_proxy_stake, int min_client_stake, cell proxy_sc_code, cell worker_sc_code, cell client_sc_code) = unpack_cocoon_params(params);
-  return (version, last_proxy_seqno, params_version, unique_id, is_test, price_per_token, worker_fee_per_token, 
+  return (version, last_proxy_seqno, params_version, unique_id, is_test, price_per_token, worker_fee_per_token,
           min_proxy_stake, min_client_stake, owner_address);
 }
 
 int proxy_hash_is_valid(int hash) method_id {
   (slice owner_address, cell proxy_hashes, cell registered_proxies, int last_proxy_seqno, cell worker_hashes,
-    cell model_hashes, int version, cell params) = load_data();
+    cell model_hashes, int version, cell params, cell public_keys_manager_data) = load_data();
   (slice value, int is_found) = proxy_hashes.udict_get?(256, hash);
   return is_found;
 }
 
 int worker_hash_is_valid(int hash) method_id {
   (slice owner_address, cell proxy_hashes, cell registered_proxies, int last_proxy_seqno, cell worker_hashes,
-    cell model_hashes, int version, cell params) = load_data();
+    cell model_hashes, int version, cell params, cell public_keys_manager_data) = load_data();
   (slice value, int is_found) = worker_hashes.udict_get?(256, hash);
   return is_found;
 }
 
 int model_hash_is_valid(int hash) method_id {
   (slice owner_address, cell proxy_hashes, cell registered_proxies, int last_proxy_seqno, cell worker_hashes,
-    cell model_hashes, int version, cell params) = load_data();
+    cell model_hashes, int version, cell params, cell public_keys_manager_data) = load_data();
   (slice value, int is_found) = model_hashes.udict_get?(256, hash);
   return is_found;
 }
 
 int last_proxy_seqno() method_id {
   (slice owner_address, cell proxy_hashes, cell registered_proxies, int last_proxy_seqno, cell worker_hashes,
-    cell model_hashes, int version, cell params) = load_data();
+    cell model_hashes, int version, cell params, cell public_keys_manager_data) = load_data();
   return last_proxy_seqno;
+}
+
+int public_key_is_valid(int hash) method_id {
+  (slice owner_address, cell proxy_hashes, cell registered_proxies, int last_proxy_seqno, cell worker_hashes,
+    cell model_hashes, int version, cell params, cell public_keys_manager_data) = load_data();
+  (cell public_keys_dict, int public_keys_manager_public_key, slice public_keys_manager_net_addr) =
+      unpack_cocoon_public_keys_manager_data(public_keys_manager_data);
+  (slice value, int is_found) = public_keys_dict.udict_get?(256, hash);
+  return is_found;
 }
 
 (int, int, int, int, int, int, int, int, int, int, int, int, int, int) get_cur_params() method_id {
   (slice owner_address, cell proxy_hashes, cell registered_proxies, int last_proxy_seqno, cell worker_hashes,
-    cell model_hashes, int version, cell params) = load_data();
+    cell model_hashes, int version, cell params, cell public_keys_manager_data) = load_data();
   (int params_version, int unique_id, int is_test, int price_per_token,
-   int worker_fee_per_token, int prompt_tokens_price_multiplier, int cached_tokens_price_multiplier, 
+   int worker_fee_per_token, int prompt_tokens_price_multiplier, int cached_tokens_price_multiplier,
    int completion_tokens_price_multiplier, int reasoning_tokens_price_multiplier,
    int proxy_delay_before_close, int client_delay_before_close,
    int min_proxy_stake, int min_client_stake, cell proxy_sc_code, cell worker_sc_code, cell client_sc_code) = unpack_cocoon_params(params);
@@ -304,6 +392,6 @@ int last_proxy_seqno() method_id {
   if (~ null?(client_sc_code)) {
     client_sc_hash = slice_hash(client_sc_code.begin_parse());
   }
-  return (params_version, unique_id, is_test, price_per_token, worker_fee_per_token, cached_tokens_price_multiplier, reasoning_tokens_price_multiplier, 
+  return (params_version, unique_id, is_test, price_per_token, worker_fee_per_token, cached_tokens_price_multiplier, reasoning_tokens_price_multiplier,
      proxy_delay_before_close, client_delay_before_close, min_proxy_stake, min_client_stake, proxy_sc_hash, worker_sc_hash, client_sc_hash);
 }

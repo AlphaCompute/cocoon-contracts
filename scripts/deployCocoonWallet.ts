@@ -6,14 +6,14 @@ import {promptUrl, promptAddress, promptToncoin, promptUserFriendlyAddress, asse
 export async function run(provider: NetworkProvider) {
     const isTestnet = provider.network() !== 'mainnet';
     const ui = provider.ui();
-    
+
     const adminAddress = await promptUserFriendlyAddress("Enter the address of owner:", ui, isTestnet);
-    
+
     const hashToBeAddedHex = await ui.input("public key (in HEX format):");
-   
-    const hashToBeAdded = await Buffer.from(hashToBeAddedHex, 'hex') 
+
+    const hashToBeAdded = await Buffer.from(hashToBeAddedHex, 'hex')
     assert (hashToBeAdded.length == 32, "hash has to be 32 bytes long", ui);
-    
+
     const conf : CocoonWalletConfig = {
       publicKey: hashToBeAdded,
       ownerAddress: adminAddress.address

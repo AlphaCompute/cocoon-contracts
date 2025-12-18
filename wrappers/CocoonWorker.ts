@@ -92,7 +92,7 @@ export class CocoonWorker implements Contract {
             .storeUint(newTokens, 64)
             .storeAddress(workerAddress)
             .endCell();
-        
+
         // Create outer message
         const body = beginCell()
             .storeUint(op, 32)
@@ -101,7 +101,7 @@ export class CocoonWorker implements Contract {
             .storeBuffer(signature)
             .storeRef(signedDataCell)
             .endCell();
-        
+
         return await provider.internal(via, {
             value,
             sendMode: SendMode.PAY_GAS_SEPARATELY,
@@ -125,9 +125,9 @@ export class CocoonWorker implements Contract {
             .storeUint(newTokens, 64)
             .storeAddress(workerAddress)
             .endCell();
-        
+
         const signature = sign(signedDataCell.hash(), keyPair.secretKey);
-        
+
         return this.sendSignedPayout(
             provider,
             via,
@@ -157,9 +157,9 @@ export class CocoonWorker implements Contract {
             .storeUint(newTokens, 64)
             .storeAddress(workerAddress)
             .endCell();
-        
+
         const signature = sign(signedDataCell.hash(), keyPair.secretKey);
-        
+
         return this.sendSignedPayout(
             provider,
             via,

@@ -99,7 +99,7 @@ describe('Integration - Full Lifecycle', () => {
         // 1. Most frequent: Proxy's CocoonWallet sends "save state" messages (do_not_process)
         // 2. Less frequent: Workers withdraw earnings, clients pay
         // 3. Rare: Client top-ups
-        
+
         const SAVE_STATE_MESSAGES = 100;      // Proxy saves state 100 times
         const WORKER_WITHDRAWALS = 5;         // Workers withdraw 5 times
         const CLIENT_CHARGES = 5;             // Clients charged 5 times
@@ -112,7 +112,7 @@ describe('Integration - Full Lifecycle', () => {
         // ============================================================
         // SETUP: Deploy contracts
         // ============================================================
-        
+
         // Deploy CocoonWallet for proxy operator
         const proxyWallet = blockchain.openContract(
             CocoonWallet.createFromConfig({
@@ -166,7 +166,7 @@ describe('Integration - Full Lifecycle', () => {
             }, clientCode)
         );
         await cocoonClient.sendDeploy(clientOwner.getSender(), toNano('6'));
-        
+
         // Initial client top-up - deposit enough to cover usage
         // Total tokens = SAVE_STATE_MESSAGES × TOKENS_PER_CYCLE = 10,000,000 tokens
         // Cost = 10,000,000 × 0.00001 = 100 TON
@@ -190,7 +190,7 @@ describe('Integration - Full Lifecycle', () => {
         // Proxy's CocoonWallet sends external messages with "do_not_process" to Proxy
         // ============================================================
         const OP_DO_NOT_PROCESS = 0x9a1247c0;
-        
+
         for (let i = 0; i < SAVE_STATE_MESSAGES; i++) {
             const saveStateMsg = beginCell()
                 .storeUint(OP_DO_NOT_PROCESS, 32)
@@ -198,7 +198,7 @@ describe('Integration - Full Lifecycle', () => {
                 .storeUint(0x12345678, 32)              // proxy_save_state opcode (ignored)
                 .storeUint(i, 32)                       // seqno
                 .endCell();
-            
+
             await proxyWallet.sendExternalSigned(
                 [{ to: cocoonProxy.address, value: 1n, body: saveStateMsg }],
                 proxyKeyPair,

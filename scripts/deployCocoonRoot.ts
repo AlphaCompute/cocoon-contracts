@@ -13,7 +13,7 @@ export async function run(provider: NetworkProvider) {
     const workerCode = await compile('CocoonWorker');
     const clientCode = await compile('CocoonClient');
     const proxyCode = await compile('CocoonProxy');
-    
+
     const adminAddress = await promptUserFriendlyAddress("Enter the address of the owner (admin):", ui, isTestnet);
     const ownerAddress = adminAddress.address;
     const uniqueId : number = 17;

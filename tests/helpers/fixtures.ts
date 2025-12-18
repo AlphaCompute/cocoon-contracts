@@ -31,10 +31,32 @@ export class TestKeyPairs {
  */
 export function createDefaultParams(overrides?: Partial<CocoonParams>): CocoonParams {
     return {
-        struct_version: 3,
+        struct_version: 4,
         params_version: 1,
         unique_id: 12345,
         is_test: true,
+        price_per_token: toNano('0.001'),
+        worker_fee_per_token: toNano('0.0001'),
+        prompt_tokens_price_multiplier: 11000,
+        cached_tokens_price_multiplier: 12000,
+        completion_tokens_price_multiplier: 13000,
+        reasoning_tokens_price_multiplier: 14000,
+        proxy_delay_before_close: 3600,
+        client_delay_before_close: 3600,
+        min_proxy_stake: toNano('1.0'),
+        min_client_stake: toNano('1.0'),
+        proxy_sc_code: null,
+        worker_sc_code: null,
+        client_sc_code: null,
+        ...overrides,
+    };
+}
+export function createAltParams(overrides?: Partial<CocoonParams>): CocoonParams {
+    return {
+        struct_version: 4,
+        params_version: 1,
+        unique_id: 54321,
+        is_test: false,
         price_per_token: toNano('0.001'),
         worker_fee_per_token: toNano('0.0001'),
         prompt_tokens_price_multiplier: 11000,

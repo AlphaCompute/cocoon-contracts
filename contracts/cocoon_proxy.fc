@@ -12,7 +12,7 @@
 
 ;;
 ;; if state is normal: set state CLOSING, do nothing
-;; if state is closing: get back earnings and stake. This message can only be sent from within anclave 
+;; if state is closing: get back earnings and stake. This message can only be sent from within anclave
 ;;
 (int, int, int, int ) close_proxy(int state, int unlock_ts, int balance, int stake, int query_id, slice owner_address, cell params, slice send_excesses_to,
                                   int to_leave_on_balance) impure {
@@ -28,7 +28,7 @@
   } elseif (state == proxy_state_closing) {
 
     (int params_version, int unique_id, int is_test, int price_per_token,
-     int worker_fee_per_token, int prompt_tokens_price_multiplier, int cached_tokens_price_multiplier, 
+     int worker_fee_per_token, int prompt_tokens_price_multiplier, int cached_tokens_price_multiplier,
      int completion_tokens_price_multiplier, int reasoning_tokens_price_multiplier,
      int proxy_delay_before_close, int client_delay_before_close, int min_proxy_stake, int min_client_stake,
      cell proxy_sc_code, cell worker_sc_code, cell client_sc_code) = unpack_cocoon_params(params);
@@ -47,7 +47,7 @@
   } else {
 
     throw(error::closed);
-    
+
     return (proxy_state_closed, 0, 0, 0);
 
   }
@@ -73,7 +73,7 @@
   if (op == op::do_not_process) {
     return ();
   }
-    
+
   int query_id = 0;
 
   if (op != 0) {
@@ -98,14 +98,14 @@
     in_msg_body.end_parse();
 
     (int params_version, int unique_id, int is_test, int price_per_token,
-     int worker_fee_per_token, int prompt_tokens_price_multiplier, int cached_tokens_price_multiplier, 
+     int worker_fee_per_token, int prompt_tokens_price_multiplier, int cached_tokens_price_multiplier,
      int completion_tokens_price_multiplier, int reasoning_tokens_price_multiplier,
      int proxy_delay_before_close, int client_delay_before_close, int min_proxy_stake, int min_client_stake,
      cell proxy_sc_code, cell worker_sc_code, cell client_sc_code) = unpack_cocoon_params(params);
-    cell worker_params = pack_cocoon_params(params_version, unique_id, is_test, price_per_token, worker_fee_per_token, 
-                                            prompt_tokens_price_multiplier, cached_tokens_price_multiplier, 
+    cell worker_params = pack_cocoon_params(params_version, unique_id, is_test, price_per_token, worker_fee_per_token,
+                                            prompt_tokens_price_multiplier, cached_tokens_price_multiplier,
                                             completion_tokens_price_multiplier, reasoning_tokens_price_multiplier,
-                                            proxy_delay_before_close, client_delay_before_close, min_proxy_stake, min_client_stake, 
+                                            proxy_delay_before_close, client_delay_before_close, min_proxy_stake, min_client_stake,
                                             null(), null(), null());
     slice calculated_worker_address = calculate_cocoon_worker_address(worker_owner_address, my_address(), proxy_public_key, worker_params, worker_sc_code);
     throw_unless(error::contract_address_mismatch, equal_slices_bits(sender_address, calculated_worker_address));
@@ -155,14 +155,14 @@
     in_msg_body.end_parse();
 
     (int params_version, int unique_id, int is_test, int price_per_token,
-     int worker_fee_per_token, int prompt_tokens_price_multiplier, int cached_tokens_price_multiplier, 
+     int worker_fee_per_token, int prompt_tokens_price_multiplier, int cached_tokens_price_multiplier,
      int completion_tokens_price_multiplier, int reasoning_tokens_price_multiplier,
      int proxy_delay_before_close, int client_delay_before_close, int min_proxy_stake, int min_client_stake,
      cell proxy_sc_code, cell worker_sc_code, cell client_sc_code) = unpack_cocoon_params(params);
-    cell client_params = pack_cocoon_params(params_version, unique_id, is_test, price_per_token, worker_fee_per_token, 
-                                            prompt_tokens_price_multiplier, cached_tokens_price_multiplier, 
+    cell client_params = pack_cocoon_params(params_version, unique_id, is_test, price_per_token, worker_fee_per_token,
+                                            prompt_tokens_price_multiplier, cached_tokens_price_multiplier,
                                             completion_tokens_price_multiplier, reasoning_tokens_price_multiplier,
-                                            proxy_delay_before_close, client_delay_before_close, min_proxy_stake, min_client_stake, 
+                                            proxy_delay_before_close, client_delay_before_close, min_proxy_stake, min_client_stake,
                                             null(), null(), null());
     slice calculated_client_address = calculate_cocoon_client_address(client_owner_address, my_address(), proxy_public_key, min_client_stake, client_params, client_sc_code);
     throw_unless(error::contract_address_mismatch, equal_slices_bits(sender_address, calculated_client_address));
@@ -175,7 +175,7 @@
       slice send_excesses_to = payload~load_msg_addr();
       payload.end_parse();
 
-      ;; top_up is always allowed. Client should be able 
+      ;; top_up is always allowed. Client should be able
       ;; to get this money back by closing it's contract
       raw_reserve(to_leave_on_balance + top_up_coins, 0);
 
@@ -346,7 +346,7 @@
 (slice, int, slice, int, int, int, int, int, int, int, int, int) get_cocoon_proxy_data() method_id {
   (slice owner_address, int proxy_public_key, slice root_address, int state, int balance, int stake, int unlock_ts, cell params) = load_data();
   (int params_version, int unique_id, int is_test, int price_per_token,
-   int worker_fee_per_token, int prompt_tokens_price_multiplier, int cached_tokens_price_multiplier, 
+   int worker_fee_per_token, int prompt_tokens_price_multiplier, int cached_tokens_price_multiplier,
    int completion_tokens_price_multiplier, int reasoning_tokens_price_multiplier,
    int proxy_delay_before_close, int client_delay_before_close, int min_proxy_stake, int min_client_stake,
    cell proxy_sc_code, cell worker_sc_code, cell client_sc_code) = unpack_cocoon_params(params);

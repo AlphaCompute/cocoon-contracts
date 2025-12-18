@@ -82,7 +82,7 @@
   }
 
   (int params_version, int unique_id, int is_test, int price_per_token,
-   int worker_fee_per_token, int prompt_tokens_price_multiplier, int cached_tokens_price_multiplier, 
+   int worker_fee_per_token, int prompt_tokens_price_multiplier, int cached_tokens_price_multiplier,
    int completion_tokens_price_multiplier, int reasoning_tokens_price_multiplier,
    int proxy_delay_before_close, int client_delay_before_close, int min_proxy_stake, int min_client_stake,
    cell proxy_sc_code, cell worker_sc_code, cell client_sc_code) = unpack_cocoon_params(params);
@@ -203,7 +203,7 @@
     raw_reserve(to_leave_on_balance, 0);
 
     forward_info(proxy_address, query_id, owner_address, state, balance, stake, tokens_used, secret_hash, send_excesses_to);
-  
+
   } elseif (op == op::owner_client_withdraw) {
 
     slice send_excesses_to = in_msg_body~load_msg_addr();
@@ -234,7 +234,7 @@
     if (state == client_state_normal) {
 
       (int params_version, int unique_id, int is_test, int price_per_token,
-       int worker_fee_per_token, int prompt_tokens_price_multiplier, int cached_tokens_price_multiplier, 
+       int worker_fee_per_token, int prompt_tokens_price_multiplier, int cached_tokens_price_multiplier,
        int completion_tokens_price_multiplier, int reasoning_tokens_price_multiplier,
        int proxy_delay_before_close, int client_delay_before_close, int min_proxy_stake, int min_client_stake,
        cell proxy_sc_code, cell worker_sc_code, cell client_sc_code) = unpack_cocoon_params(params);
@@ -248,11 +248,11 @@
 
         int to_refund = balance - stake;
         balance = stake;
-    
+
         forward_refund_granted(proxy_address, query_id, owner_address, state, balance, stake, tokens_used, secret_hash, to_refund, send_excesses_to);
 
       } else {
-      
+
         forward_info(proxy_address, query_id, owner_address, state, balance, stake, tokens_used, secret_hash, send_excesses_to);
 
       }

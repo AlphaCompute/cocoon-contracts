@@ -21,7 +21,10 @@ const int op::root_upgrade = 0x11aefd51;
 const int op::root_reset = 0x563c1d96;
 const int op::root_upgrade_full = 0x4f7c5789;
 const int op::root_change_owner = 0xc4a1ae54;
+const int op::root_change_key_manager = 0xb01c0fe9;
 
+const int op::root_add_public_key_signed = 0x9e0e1821;
+const int op::root_add_public_key = 0x6e5a646a;
 
 ;; worker to proxy
 const int op::worker_proxy_request = 0x4d725d2c;
@@ -57,7 +60,7 @@ const int op::owner_client_change_secret_hash = 0xa9357034;
 const int op::owner_client_change_secret_hash_and_top_up = 0x8473b408;
 const int op::owner_client_request_refund = 0xfafa6cc1;
 const int op::owner_client_increase_stake = 0x6a1f6a60;
-const int op::owner_client_withdraw = 0xda068e78; 
+const int op::owner_client_withdraw = 0xda068e78;
 
 ;; wallet control
 const int op::owner_wallet_send_message = 0x9c69f376;

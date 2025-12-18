@@ -196,18 +196,18 @@ describe('CocoonProxy - Comprehensive (Part 2: Inter-Contract Messages & Getters
             });
 
             it('should return funds when proxy is CLOSED', async () => {
-                // Close proxy 
+                // Close proxy
                 await cocoonProxy.sendCloseRequest(owner.getSender(), {
                     value: toNano('0.2'),
                     sendExcessesTo: owner.address,
                     keyPair,
                 });
-                
+
                 const initialProxyState = await cocoonProxy.getData();
                 expect(initialProxyState.state).toBe(1);
-                
+
                 blockchain.now = Math.floor(Date.now() / 1000) + 7300;
-                
+
                 await cocoonProxy.sendCloseComplete(owner.getSender(), {
                     value: toNano('0.2'),
                     sendExcessesTo: owner.address,
@@ -226,7 +226,7 @@ describe('CocoonProxy - Comprehensive (Part 2: Inter-Contract Messages & Getters
                     to: cocoonProxy.address,
                     success: true,
                 });
-                
+
                 await cocoonProxy.sendCloseComplete(owner.getSender(), {
                     value: toNano('0.2'),
                     sendExcessesTo: owner.address,

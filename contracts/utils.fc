@@ -1,4 +1,5 @@
 #include "opcodes.fc";
+#include "imports/stdlib.fc";
 
 const int ONE_TON = 1000000000;
 
@@ -84,17 +85,35 @@ int my_balance() inline {
   return [payload, send_excesses_to];
 }
 
+(slice, slice) load_cocoon_net_addr(slice cs) {
+  throw_unless(error::msg_format_mismatch, cs~load_uint(1) == 0);
+  int len = cs~load_uint(7);
+  slice res = cs~load_bits(8 * len);
+  return (cs, res);
+}
+
+builder store_cocoon_net_addr(builder cb, slice net_addr) {
+  int b = net_addr.slice_bits();
+  throw_unless(error::msg_format_mismatch, net_addr.slice_refs() == 0);
+  throw_unless(error::msg_format_mismatch, b % 8 == 0);
+  throw_unless(error::msg_format_mismatch, b < 128 * 8);
+  return cb
+    .store_uint(0, 1)
+    .store_uint(b / 8, 7)
+    .store_slice(net_addr);
+}
+
 ;; ====== PARAMS =======
 ;; 8 + 32 + 32 + 1 + 68 + 68 + 32 + 68 + 68 + 1 + 1 + 1 = 380 bits
 
 cell pack_cocoon_params(int params_version, int unique_id, int is_test, int price_per_token, int worker_fee_per_token,
-                               int prompt_tokens_price_multiplier, int cached_tokens_price_multiplier, 
+                               int prompt_tokens_price_multiplier, int cached_tokens_price_multiplier,
                                int completion_tokens_price_multiplier, int reasoning_tokens_price_multiplier,
                                int proxy_delay_before_close, int client_delay_before_close,
                                int min_proxy_stake, int min_client_stake,
                                cell proxy_sc_code, cell worker_sc_code, cell client_sc_code) {
   return begin_cell()
-    .store_uint(3, 8) ;; struct version
+    .store_uint(4, 8) ;; struct version
     .store_uint(params_version, 32)
     .store_uint(unique_id, 32)
     .store_uint(is_test, 1)
@@ -117,7 +136,7 @@ cell pack_cocoon_params(int params_version, int unique_id, int is_test, int pric
 (int, int, int, int, int, int, int, int, int, int, int, int, int, cell, cell, cell) unpack_cocoon_params(cell data) {
   slice cs = data.begin_parse();
   int version = cs~load_uint(8);
-  throw_unless(error::stored_data_damaged, version == 3);
+  throw_unless(error::stored_data_damaged, version == 4);
 
   return (
     cs~load_uint(32),    ;; params_version
@@ -141,23 +160,40 @@ cell pack_cocoon_params(int params_version, int unique_id, int is_test, int pric
 
 cell repack_cocoon_params_without_code(cell data) {
   (int params_version, int unique_id, int is_test, int price_per_token, int worker_fee_per_token,
-                                 int prompt_tokens_price_multiplier, int cached_tokens_price_multiplier, 
+                                 int prompt_tokens_price_multiplier, int cached_tokens_price_multiplier,
                                  int completion_tokens_price_multiplier, int reasoning_tokens_price_multiplier,
                                  int proxy_delay_before_close, int client_delay_before_close,
-                                 int min_proxy_stake, int min_client_stake, 
+                                 int min_proxy_stake, int min_client_stake,
                                  cell proxy_sc_code, cell worker_sc_code, cell client_sc_code) = unpack_cocoon_params(data);
   return pack_cocoon_params(params_version, unique_id, is_test, price_per_token, worker_fee_per_token,
-                            prompt_tokens_price_multiplier, cached_tokens_price_multiplier, 
+                            prompt_tokens_price_multiplier, cached_tokens_price_multiplier,
                             completion_tokens_price_multiplier, reasoning_tokens_price_multiplier,
-                            proxy_delay_before_close, client_delay_before_close, min_proxy_stake, min_client_stake, 
+                            proxy_delay_before_close, client_delay_before_close, min_proxy_stake, min_client_stake,
                             null(), null(), null());
 }
 
 ;; ======  ROOT  =======
 
 
+cell pack_cocoon_public_keys_manager_data(cell public_keys_dict, int public_keys_manager_public_key, slice public_keys_manager_net_addr) {
+  return begin_cell()
+           .store_dict(public_keys_dict)
+           .store_uint(public_keys_manager_public_key, 256)
+           .store_cocoon_net_addr(public_keys_manager_net_addr)
+           .end_cell();
+}
+
+(cell, int, slice) unpack_cocoon_public_keys_manager_data(cell data) {
+  slice cs = data.begin_parse();
+  return (
+    cs~load_dict(),
+    cs~load_uint(256),
+    cs~load_cocoon_net_addr()
+  );
+}
+
 cell pack_cocoon_root_data(slice owner_address, cell proxy_hashes, cell registered_proxies, int last_proxy_seqno, cell worker_hashes,
-                         cell model_hashes, int version, cell params) inline {
+                           cell model_hashes, int version, cell params, cell public_keys_manager_data) inline {
 
   cell data = begin_cell()
            .store_dict(proxy_hashes)
@@ -172,27 +208,29 @@ cell pack_cocoon_root_data(slice owner_address, cell proxy_hashes, cell register
            .store_uint(version, 32)
            .store_ref(data)
            .store_ref(params)
+           .store_ref(public_keys_manager_data)
            .end_cell();
 }
 
-(slice, cell, cell, int, cell, cell, int, cell) unpack_cocoon_root_data(slice ds) {
+(slice, cell, cell, int, cell, cell, int, cell, cell) unpack_cocoon_root_data(slice ds) {
   slice data = ds~load_ref().begin_parse();
   return (
-    ds~load_msg_addr(),  ;; owner_address
+    ds~load_msg_addr(),    ;; owner_address
     data~load_dict(),      ;; proxy_hashes
     data~load_dict(),      ;; registered_proxies
     data~load_uint(32),    ;; last_proxy_seqno
     data~load_dict(),      ;; worker_hashes
-    data~load_dict(),      ;; model_hashes 
-    ds~load_uint(32),    ;; version
-    ds~load_ref()        ;; params
+    data~load_dict(),      ;; model_hashes
+    ds~load_uint(32),      ;; version
+    ds~load_ref(),         ;; params
+    ds~load_ref()          ;; public_keys_manager_data
   );
 }
 
 ;; ====== PROXY  =======
 ;; 267 + 256 + 267 + 2 + 68 + 32 = 892
 
-cell pack_cocoon_proxy_data(slice owner_address, int proxy_public_key, slice root_address, int state, int balance, int stake, 
+cell pack_cocoon_proxy_data(slice owner_address, int proxy_public_key, slice root_address, int state, int balance, int stake,
                           int unlock_ts, cell params) inline {
    return  begin_cell()
             .store_slice(owner_address)

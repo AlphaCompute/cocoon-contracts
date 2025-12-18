@@ -336,12 +336,12 @@ describe('CocoonClient', () => {
         it('[BUG #4] should allow INCREASING stake (but currently fails due to inverted logic)', async () => {
             // BUG: The contract checks `new_stake <= stake` instead of `new_stake >= stake`
             // This means it REJECTS valid increases and ALLOWS invalid decreases
-            
+
             // Get current stake (should be 1 TON from setup)
             const dataBefore = await cocoonClient.getData();
             const currentStake = dataBefore.stake;
             expect(currentStake).toBe(toNano('1')); // Verify initial stake
-            
+
             // Try to INCREASE stake from 1 TON to 2 TON (should succeed)
             const newStake = toNano('2'); // HIGHER than current (valid increase)
             const result = await cocoonClient.sendOwnerIncreaseStake(
@@ -357,7 +357,7 @@ describe('CocoonClient', () => {
                 to: cocoonClient.address,
                 success: true,
             });
-            
+
             // Verify stake was updated
             const dataAfter = await cocoonClient.getData();
             expect(dataAfter.stake).toBe(newStake);
@@ -366,12 +366,12 @@ describe('CocoonClient', () => {
         it('[BUG #4] should FORBID decreasing stake (but currently allows it due to inverted logic)', async () => {
             // BUG: The contract checks `new_stake <= stake` instead of `new_stake >= stake`
             // This means stake DECREASES are ALLOWED when they should be FORBIDDEN
-            
+
             // Get current stake (should be 1 TON from setup)
             const dataBefore = await cocoonClient.getData();
             const currentStake = dataBefore.stake;
             expect(currentStake).toBe(toNano('1')); // Verify initial stake
-            
+
             // Try to DECREASE stake from 1 TON to 0.5 TON (should fail)
             const newStake = toNano('0.5'); // LOWER than current (invalid decrease)
             const result = await cocoonClient.sendOwnerIncreaseStake(
@@ -388,7 +388,7 @@ describe('CocoonClient', () => {
                 success: false,
                 exitCode: 1003, // ERROR_LOW_MSG_VALUE
             });
-            
+
             // Verify stake was NOT changed
             const dataAfter = await cocoonClient.getData();
             expect(dataAfter.stake).toBe(currentStake); // Should still be 1 TON

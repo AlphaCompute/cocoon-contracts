@@ -19,7 +19,7 @@ async function unBase64OrHexHash(s:String, ui:UIProvider) {
 
 const addProxyType = async(provider:NetworkProvider, ui:UIProvider, rootAddress:Address) => {
     const isTestnet = provider.network() !== 'mainnet';
-    
+
     const hashToBeAddedB64 = await ui.input("proxy HASH:");
     const hashToBeAdded = await unBase64OrHexHash(hashToBeAddedB64, ui);
 
@@ -29,7 +29,7 @@ const addProxyType = async(provider:NetworkProvider, ui:UIProvider, rootAddress:
 
 const delProxyType = async(provider:NetworkProvider, ui:UIProvider, rootAddress:Address) => {
     const isTestnet = provider.network() !== 'mainnet';
-    
+
     const hashToBeRemovedB64 = await ui.input("proxy HASH:");
     const hashToBeRemoved = await unBase64OrHexHash(hashToBeRemovedB64, ui);
 
@@ -41,7 +41,7 @@ const addWorkerType = async(provider:NetworkProvider, ui:UIProvider, rootAddress
     const crypto = require('crypto');
 
     const isTestnet = provider.network() !== 'mainnet';
-    
+
     const hashToBeAddedB64 = await ui.input("worker HASH:");
     const hashToBeAdded = await unBase64OrHexHash(hashToBeAddedB64, ui);
 
@@ -51,7 +51,7 @@ const addWorkerType = async(provider:NetworkProvider, ui:UIProvider, rootAddress
 
 const delWorkerType = async(provider:NetworkProvider, ui:UIProvider, rootAddress:Address) => {
     const isTestnet = provider.network() !== 'mainnet';
-    
+
     const hashToBeRemovedB64 = await ui.input("worker HASH:");
     const hashToBeRemoved = await unBase64OrHexHash(hashToBeRemovedB64, ui);
 
@@ -63,7 +63,7 @@ const addModelType = async(provider:NetworkProvider, ui:UIProvider, rootAddress:
     const crypto = require('crypto');
 
     const isTestnet = provider.network() !== 'mainnet';
-    
+
     const modelType = await ui.input("model TYPE (string):");
     const modelTypeHash = await crypto.createHash('sha256').update(modelType).digest('Buffer');
 
@@ -75,7 +75,7 @@ const delModelType = async(provider:NetworkProvider, ui:UIProvider, rootAddress:
     const crypto = require('crypto');
 
     const isTestnet = provider.network() !== 'mainnet';
-    
+
     const modelType = await ui.input("model TYPE (string):");
     const modelTypeHash = await crypto.createHash('sha256').update(modelType).digest('Buffer');
 
@@ -85,7 +85,7 @@ const delModelType = async(provider:NetworkProvider, ui:UIProvider, rootAddress:
 
 const addProxyInfo = async(provider:NetworkProvider, ui:UIProvider, rootAddress:Address) => {
     const isTestnet = provider.network() !== 'mainnet';
-    
+
     const proxyAddress = await ui.input("proxy IP and PORT:");
     assert (proxyAddress.length <= 127, "address must not be longer than 127 bytes", ui);
 
@@ -95,47 +95,47 @@ const addProxyInfo = async(provider:NetworkProvider, ui:UIProvider, rootAddress:
 
 const delProxyInfo = async(provider:NetworkProvider, ui:UIProvider, rootAddress:Address) => {
     const isTestnet = provider.network() !== 'mainnet';
-    
+
     const proxySeqno = parseInt(await ui.input("proxy seqno:"), 10);
-    
+
     const cocoonRoot = provider.open(CocoonRoot.createFromAddress(rootAddress));
     await cocoonRoot.sendDelProxyInfo(provider.sender(), proxySeqno);
 };
 
 const updateProxyInfo = async(provider:NetworkProvider, ui:UIProvider, rootAddress:Address) => {
     const isTestnet = provider.network() !== 'mainnet';
-    
+
     const proxySeqno = parseInt(await ui.input("proxy seqno:"), 10);
-    
+
     const proxyAddress = await ui.input("proxy new IP and PORT:");
     assert (proxyAddress.length <= 127, "address must not be longer than 127 bytes", ui);
-    
+
     const cocoonRoot = provider.open(CocoonRoot.createFromAddress(rootAddress));
     await cocoonRoot.sendUpdateProxyInfo(provider.sender(), proxySeqno, proxyAddress);
 };
 
 const updateRootCode = async(provider:NetworkProvider, ui:UIProvider, rootAddress:Address) => {
     const isTestnet = provider.network() !== 'mainnet';
-    
+
     const rootCode = await compile('CocoonRoot');
-    
+
     const cocoonRoot = provider.open(CocoonRoot.createFromAddress(rootAddress));
     await cocoonRoot.sendUpdateCode(provider.sender(), rootCode);
 };
 
 const changeFees = async(provider:NetworkProvider, ui:UIProvider, rootAddress:Address) => {
     const isTestnet = provider.network() !== 'mainnet';
-    
+
     const pricePerToken  = BigInt(await ui.input("price per token:"));
     const workerFeePerToken  = BigInt(await ui.input("worker fee per token:"));
-    
+
     const cocoonRoot = provider.open(CocoonRoot.createFromAddress(rootAddress));
     await cocoonRoot.sendChangeFees(provider.sender(), pricePerToken, workerFeePerToken);
 };
 
 const changeParams = async(provider:NetworkProvider, ui:UIProvider, rootAddress:Address) => {
     const isTestnet = provider.network() !== 'mainnet';
-    
+
     const pricePerToken  = BigInt(await ui.input("price per token:"));
     const workerFeePerToken  = BigInt(await ui.input("worker fee per token:"));
     const proxyDelayBeforeClose = parseInt(await ui.input("proxy delay before close (in seconds):"));
@@ -149,73 +149,73 @@ const changeParams = async(provider:NetworkProvider, ui:UIProvider, rootAddress:
 
 const changeOwner = async(provider:NetworkProvider, ui:UIProvider, rootAddress:Address) => {
     const isTestnet = provider.network() !== 'mainnet';
-    
+
     const newOwner  = await promptAddress("Enter the new address of the cocoon root contract owner:", ui);
-    
+
     const cocoonRoot = provider.open(CocoonRoot.createFromAddress(rootAddress));
     await cocoonRoot.sendChangeOwner(provider.sender(), newOwner);
 };
 
 const reset = async(provider:NetworkProvider, ui:UIProvider, rootAddress:Address) => {
     const isTestnet = provider.network() !== 'mainnet';
-    
-    
+
+
     const cocoonRoot = provider.open(CocoonRoot.createFromAddress(rootAddress));
     await cocoonRoot.sendReset(provider.sender());
 };
 
 const updateContracts = async(provider:NetworkProvider, ui:UIProvider, rootAddress:Address) => {
     const isTestnet = provider.network() !== 'mainnet';
-    
+
     const workerCode = await compile('CocoonWorker');
     const clientCode = await compile('CocoonClient');
     const proxyCode = await compile('CocoonProxy');
-    
+
     const cocoonRoot = provider.open(CocoonRoot.createFromAddress(rootAddress));
     await cocoonRoot.sendUpdateContracts(provider.sender(), proxyCode, workerCode, clientCode);
 };
 
 const getLastProxySeqno = async(provider:NetworkProvider, ui:UIProvider, rootAddress:Address) => {
     const isTestnet = provider.network() !== 'mainnet';
-    
+
     const cocoonRoot = provider.open(CocoonRoot.createFromAddress(rootAddress));
-    
+
     const seqno = await cocoonRoot.getLastProxySeqno();
-    
+
     console.log("seqno=" + seqno);
 };
 
 const getAllParams = async(provider:NetworkProvider, ui:UIProvider, rootAddress:Address) => {
     const isTestnet = provider.network() !== 'mainnet';
-    
+
     const cocoonRoot = provider.open(CocoonRoot.createFromAddress(rootAddress));
-    
+
     const conf = await cocoonRoot.getAllParams();
     if (!conf) {
       console.log("not deployted");
       return;
-    } 
- 
+    }
+
     console.log("owner_address=" + conf.owner_address);
     console.log("proxies_hashes=[");
     for (const [k, v] of conf.proxy_hashes) {
-      console.log("    " + k.toString(16)); 
+      console.log("    " + k.toString(16));
     }
     console.log("]");
     console.log("registered_proxies=[");
     for (const [k, v] of conf.registered_proxies) {
-      console.log("    #" + k + " " + v.addr); 
+      console.log("    #" + k + " " + v.addr);
     }
     console.log("]");
     console.log("last_proxy_seqno=" + conf.last_proxy_seqno);
     console.log("worker_types=[");
     for (const [k, v] of conf.worker_hashes) {
-      console.log("    " + k.toString(16)); 
+      console.log("    " + k.toString(16));
     }
     console.log("]");
     console.log("model_types=[");
     for (const [k, v] of conf.model_hashes) {
-      console.log("    " + k.toString(16)); 
+      console.log("    " + k.toString(16));
     }
     console.log("]");
     console.log("version=" + conf.version);
@@ -233,6 +233,13 @@ const getAllParams = async(provider:NetworkProvider, ui:UIProvider, rootAddress:
     console.log("client_delay_before_close=" + conf.params.client_delay_before_close);
     console.log("min_proxy_stake=" + conf.params.min_proxy_stake);
     console.log("min_client_stake=" + conf.params.min_client_stake);
+    console.log("public_keys=[");
+    for (const [k, v] of conf.public_keys) {
+      console.log("    " + k.toString(16) + " " + v.type + " " + v.expire_at);
+    }
+    console.log("]");
+    console.log("key_manager_public_key=" + conf.key_manager_public_key.toString(16));
+    console.log("key_manager_network_addr=" + conf.key_manager_net_addr.addr);
     if (conf.params.proxy_sc_code) {
       console.log("proxy_sc_code=" + conf.params.proxy_sc_code.hash().toString('hex'));
     }
@@ -246,21 +253,21 @@ const getAllParams = async(provider:NetworkProvider, ui:UIProvider, rootAddress:
 
 const updateAllParams = async(provider:NetworkProvider, ui:UIProvider, rootAddress:Address) => {
     const isTestnet = provider.network() !== 'mainnet';
-    
+
     const cocoonRoot = provider.open(CocoonRoot.createFromAddress(rootAddress));
-    
+
     let conf = await cocoonRoot.getAllParams();
     if (!conf) {
       console.log("not deployed, cannot update parameters");
       return;
     }
 
-    assert (conf.params.struct_version >= 0 && conf.params.struct_version <= 3, "unknown struct version " + conf.params.struct_version, ui);
+    assert (conf.params.struct_version >= 0 && conf.params.struct_version <= 4, "unknown struct version " + conf.params.struct_version, ui);
 
-    conf.params.struct_version = 3;
+    conf.params.struct_version = 4;
     conf.params.params_version += 1;
     conf.version += 1;
-   
+
     let val : string = "";
     val = await ui.input("new pricePerToken, empty to leave current value " + conf.params.price_per_token + ": ");
     if (val != "" && val != " ") {
@@ -302,7 +309,7 @@ const updateAllParams = async(provider:NetworkProvider, ui:UIProvider, rootAddre
     if (val != "" && val != " ") {
       conf.params.min_client_stake = toNano(parseInt(val));
     }
-    
+
     let updProxyHashes = Dictionary.empty(Dictionary.Keys.BigUint(256), Dictionary.Values.BitString(0));
     for (const [k, v] of conf.proxy_hashes) {
       const b = await promptBool("leave proxy hash " + k.toString(16) + "?", ["y", "n"], ui);
@@ -311,7 +318,7 @@ const updateAllParams = async(provider:NetworkProvider, ui:UIProvider, rootAddre
       }
     }
     conf.proxy_hashes = updProxyHashes;
-    
+
     let updRegisteredProxies = Dictionary.empty(Dictionary.Keys.Uint(32), createProxyInfoValue());
     for (const [k, v] of conf.registered_proxies) {
       const b = await promptBool("leave proxy #" + k + " at " + v.addr + "?", ["y", "n"], ui);
@@ -320,7 +327,7 @@ const updateAllParams = async(provider:NetworkProvider, ui:UIProvider, rootAddre
       }
     }
     conf.registered_proxies = updRegisteredProxies;
-    
+
     let updWorkerHashes = Dictionary.empty(Dictionary.Keys.BigUint(256), Dictionary.Values.BitString(0));
     for (const [k, v] of conf.worker_hashes) {
       const b = await promptBool("leave worker hash " + k.toString(16) + "?", ["y", "n"], ui);
@@ -329,7 +336,7 @@ const updateAllParams = async(provider:NetworkProvider, ui:UIProvider, rootAddre
       }
     }
     conf.worker_hashes = updWorkerHashes;
-    
+
     let updModelHashes = Dictionary.empty(Dictionary.Keys.BigUint(256), Dictionary.Values.BitString(0));
     for (const [k, v] of conf.model_hashes) {
       const b = await promptBool("leave model hash " + k.toString(16) + "?", ["y", "n"], ui);
@@ -339,7 +346,18 @@ const updateAllParams = async(provider:NetworkProvider, ui:UIProvider, rootAddre
     }
     conf.model_hashes = updModelHashes;
 
-    
+    val = await ui.input("new key manager public key, empty to leave current value " + conf.key_manager_public_key.toString(16) + ": ");
+    if (val != "" && val != " ") {
+      const buffer = await unBase64OrHexHash(val, ui);
+      const key = BigInt('0x' + buffer.toString('hex'));
+      conf.key_manager_public_key = key;
+    }
+
+    val = await ui.input("new key manager address, empty to leave current value " + conf.key_manager_net_addr.addr + ": ");
+    if (val != "" && val != " ") {
+      conf.key_manager_net_addr.addr = val;
+    }
+
     const workerCode = await compile('CocoonWorker');
     const clientCode = await compile('CocoonClient');
     const proxyCode = await compile('CocoonProxy');
@@ -347,28 +365,28 @@ const updateAllParams = async(provider:NetworkProvider, ui:UIProvider, rootAddre
     conf.params.proxy_sc_code = proxyCode;
     conf.params.worker_sc_code = workerCode;
     conf.params.client_sc_code = clientCode;
-    
+
     await cocoonRoot.sendUpgradeFull(provider.sender(), conf, rootCode);
 };
 
-const actionList = [ 'addProxyType', 
-                     'delProxyType', 
-                     'addWorkerType', 
-                     'delWorkerType', 
-                     'addModelType', 
+const actionList = [ 'addProxyType',
+                     'delProxyType',
+                     'addWorkerType',
+                     'delWorkerType',
+                     'addModelType',
                      'delModelType',
-                     'addProxyInfo', 
-                     'delProxyInfo', 
-                     'updateProxyInfo', 
-                     'updateRootCode', 
-                     'updateContracts', 
-                     'changeFees', 
-                     'changeParams', 
-                     'changeOwner', 
-                     'reset', 
-                     'getLastProxySeqno', 
-                     'getAllParams', 
-                     'updateAllParams', 
+                     'addProxyInfo',
+                     'delProxyInfo',
+                     'updateProxyInfo',
+                     'updateRootCode',
+                     'updateContracts',
+                     'changeFees',
+                     'changeParams',
+                     'changeOwner',
+                     'reset',
+                     'getLastProxySeqno',
+                     'getAllParams',
+                     'updateAllParams',
                      'Quit' ];
 
 async function getRootAddress(ui:UIProvider) {
@@ -391,7 +409,7 @@ export async function run(provider: NetworkProvider) {
     const workerCode = await compile('CocoonWorker');
     const clientCode = await compile('CocoonClient');
     const proxyCode = await compile('CocoonProxy');
-   
+
     let done = false;
     const rootAddress : Address = await getRootAddress(ui);
 
