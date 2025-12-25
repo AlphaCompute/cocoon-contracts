@@ -239,6 +239,7 @@ const getAllParams = async(provider:NetworkProvider, ui:UIProvider, rootAddress:
     }
     console.log("]");
     console.log("key_manager_public_key=" + conf.key_manager_public_key.toString(16));
+    console.log("key_manager_image_hash=" + conf.key_manager_image_hash.toString(16));
     console.log("key_manager_network_addr=" + conf.key_manager_net_addr.addr);
     if (conf.params.proxy_sc_code) {
       console.log("proxy_sc_code=" + conf.params.proxy_sc_code.hash().toString('hex'));
@@ -351,6 +352,13 @@ const updateAllParams = async(provider:NetworkProvider, ui:UIProvider, rootAddre
       const buffer = await unBase64OrHexHash(val, ui);
       const key = BigInt('0x' + buffer.toString('hex'));
       conf.key_manager_public_key = key;
+    }
+
+    val = await ui.input("new key manager image hash, empty to leave current value " + conf.key_manager_image_hash.toString(16) + ": ");
+    if (val != "" && val != " ") {
+      const buffer = await unBase64OrHexHash(val, ui);
+      const key = BigInt('0x' + buffer.toString('hex'));
+      conf.key_manager_image_hash = key;
     }
 
     val = await ui.input("new key manager address, empty to leave current value " + conf.key_manager_net_addr.addr + ": ");

@@ -44,7 +44,8 @@ describe('CocoonRoot - Comprehensive', () => {
                 client_sc_code: clientCode,
             },
             public_keys: Dictionary.empty(),
-            key_manager_public_key: BigInt(0),
+            key_manager_public_key: BigInt(8),
+            key_manager_image_hash: BigInt(9),
             key_manager_net_addr: {
               "addr" : "localhost:14000"
             }
@@ -462,7 +463,8 @@ describe('CocoonRoot - Comprehensive', () => {
                     client_sc_code: clientCode,
                 },
                 public_keys: Dictionary.empty(),
-                key_manager_public_key: BigInt(0),
+                key_manager_public_key: BigInt(18),
+                key_manager_image_hash: BigInt(19),
                 key_manager_net_addr: {
                   "addr" : "localhost:14000"
                 }
@@ -545,6 +547,7 @@ describe('CocoonRoot - Comprehensive', () => {
 
         it('should change key manager', async () => {
             const newPublicKey = createTestHash(1001);
+            const newImageHash = createTestHash(1002);
             const newAddr : ProxyInfo = {
               "addr" : "new_addr"
             };
@@ -552,7 +555,7 @@ describe('CocoonRoot - Comprehensive', () => {
             const dataBefore = await cocoonRoot.getAllParams();
             expect(dataBefore !== null).toBe(true);
 
-            const result = await cocoonRoot.sendChangeKeyManager(deployer.getSender(), newPublicKey, newAddr);
+            const result = await cocoonRoot.sendChangeKeyManager(deployer.getSender(), newPublicKey, newImageHash, newAddr);
 
             expect(result.transactions).toHaveTransaction({
                 to: cocoonRoot.address,
@@ -564,6 +567,7 @@ describe('CocoonRoot - Comprehensive', () => {
             expect(dataAfter !== null).toBe(true);
             expect(dataAfter!.version).toBe(dataBefore!.version + 1);
             expect(dataAfter!.key_manager_public_key).toBe(BigInt("0x" + newPublicKey.toString('hex')));
+            expect(dataAfter!.key_manager_image_hash).toBe(BigInt("0x" + newImageHash.toString('hex')));
             expect(dataAfter!.key_manager_net_addr.addr).toBe(newAddr.addr);
         });
 

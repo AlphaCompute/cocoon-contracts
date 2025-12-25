@@ -327,6 +327,8 @@
             .store_uint(query_id, 64); ;; query_id
       send_raw_message(msg.end_cell(), SEND_MODE_CARRY_ALL_BALANCE);
 
+      forward_excesses(sender_address, query_id);
+
     } else {
 
       throw(error::unknown_text_op);

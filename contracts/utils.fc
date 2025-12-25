@@ -175,18 +175,21 @@ cell repack_cocoon_params_without_code(cell data) {
 ;; ======  ROOT  =======
 
 
-cell pack_cocoon_public_keys_manager_data(cell public_keys_dict, int public_keys_manager_public_key, slice public_keys_manager_net_addr) {
+cell pack_cocoon_public_keys_manager_data(cell public_keys_dict, int public_keys_manager_public_key, int public_keys_manager_image_hash, 
+                                          slice public_keys_manager_net_addr) {
   return begin_cell()
            .store_dict(public_keys_dict)
            .store_uint(public_keys_manager_public_key, 256)
+           .store_uint(public_keys_manager_image_hash, 256)
            .store_cocoon_net_addr(public_keys_manager_net_addr)
            .end_cell();
 }
 
-(cell, int, slice) unpack_cocoon_public_keys_manager_data(cell data) {
+(cell, int, int, slice) unpack_cocoon_public_keys_manager_data(cell data) {
   slice cs = data.begin_parse();
   return (
     cs~load_dict(),
+    cs~load_uint(256),
     cs~load_uint(256),
     cs~load_cocoon_net_addr()
   );

@@ -41,7 +41,8 @@ describe('CocoonRoot', () => {
                 client_sc_code: clientCode,
             },
             public_keys: Dictionary.empty(),
-            key_manager_public_key: BigInt(0),
+            key_manager_public_key: BigInt(8),
+            key_manager_image_hash: BigInt(9),
             key_manager_net_addr: {
               "addr" : "localhost:14000"
             }
@@ -483,7 +484,8 @@ describe('CocoonRoot', () => {
                 client_sc_code: clientCode
             },
             public_keys: Dictionary.empty(),
-            key_manager_public_key: BigInt(0),
+            key_manager_public_key: BigInt(18),
+            key_manager_image_hash: BigInt(19),
             key_manager_net_addr: {
               "addr" : "localhost:14000"
             }

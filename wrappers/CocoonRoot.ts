@@ -141,6 +141,7 @@ export type CocoonRootConfig = {
   params: CocoonParams;
   public_keys: Dictionary<bigint, PublicKeyInfo>;
   key_manager_public_key: bigint;
+  key_manager_image_hash: bigint;
   key_manager_net_addr: ProxyInfo;
 };
 
@@ -166,7 +167,8 @@ export function cocoonRootConfigToCell(config: CocoonRootConfig): Cell {
     } else {
         const builder = beginCell()
                .storeDict(config.public_keys)
-               .storeUint(config.key_manager_public_key, 256);
+               .storeUint(config.key_manager_public_key, 256)
+               .storeUint(config.key_manager_image_hash, 256);
         createProxyInfoValue().serialize(config.key_manager_net_addr, builder);
         const keyManagerCell = builder.endCell();
         return beginCell()
@@ -455,21 +457,22 @@ export class CocoonRoot implements Contract {
         });
     }
 
-    static changeKeyManagerMessage(newPublicKey : Buffer, newAddress : ProxyInfo) {
+    static changeKeyManagerMessage(newPublicKey : Buffer, newImageHash : Buffer, newAddress : ProxyInfo) {
       let c =  beginCell()
           .storeUint(0xb01c0fe9, 32)
           .storeInt(0, 64)
           .storeBuffer(newPublicKey, 32)
+          .storeBuffer(newImageHash, 32)
 
       createProxyInfoValue().serialize(newAddress, c);
 
       return c.endCell();
     }
 
-    async sendChangeKeyManager(provider: ContractProvider, via: Sender, newPublicKey : Buffer, newAddress : ProxyInfo) {
+    async sendChangeKeyManager(provider: ContractProvider, via: Sender, newPublicKey : Buffer, newImageHash : Buffer, newAddress : ProxyInfo) {
         await provider.internal(via, {
             sendMode: SendMode.PAY_GAS_SEPARATELY,
-            body: CocoonRoot.changeKeyManagerMessage(newPublicKey, newAddress),
+            body: CocoonRoot.changeKeyManagerMessage(newPublicKey, newImageHash, newAddress),
             value: toNano("0.01"),
         });
     }
@@ -634,6 +637,7 @@ export class CocoonRoot implements Contract {
 
         let publicKeys : Dictionary<bigint, PublicKeyInfo> = Dictionary.empty(null, null);
         let keyManagerPublicKey = BigInt(0);
+        let keyManagerImageHash = BigInt(0);
         let keyManagerNetAddr : ProxyInfo = {
           addr : ""
         };
@@ -643,6 +647,7 @@ export class CocoonRoot implements Contract {
 
           publicKeys = pkcs.loadDict<bigint, PublicKeyInfo>(Dictionary.Keys.BigUint(256), createPublicKeyInfoValue());
           keyManagerPublicKey = pkcs.loadUintBig(256);
+          keyManagerImageHash = pkcs.loadUintBig(256);
           keyManagerNetAddr = createProxyInfoValue().parse(pkcs);
         }
 
@@ -679,6 +684,7 @@ export class CocoonRoot implements Contract {
           params: params,
           public_keys: publicKeys,
           key_manager_public_key: keyManagerPublicKey,
+          key_manager_image_hash: keyManagerImageHash,
           key_manager_net_addr: keyManagerNetAddr
         };
 
