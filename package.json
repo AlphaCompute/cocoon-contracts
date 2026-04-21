@@ -5,9 +5,9 @@
         "bp": "blueprint",
         "start": "blueprint run",
         "build": "blueprint build",
-        "build:tolk": "USE_TOLK=true blueprint build",
+        "build:func": "USE_FUNC=true blueprint build",
         "test": "jest --verbose",
-        "test:tolk": "USE_TOLK=true jest --verbose",
+        "test:func": "USE_FUNC=true jest --verbose",
         "release": "blueprint pack && npm publish --access public"
     },
     "dependencies": {

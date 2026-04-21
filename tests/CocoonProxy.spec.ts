@@ -5,8 +5,6 @@ import { CocoonParams, cocoonParamsToCell } from '../wrappers/CocoonRoot';
 import '@ton/test-utils';
 import { compile } from '@ton/blueprint';
 
-const USE_TOLK = process.env.USE_TOLK === 'true';
-
 // Opcodes
 const OP_DO_NOT_PROCESS = 0x9a1247c0;
 const OP_EXT_PROXY_PAYOUT_REQUEST = 0x7610e6eb;
