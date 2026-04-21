@@ -6,6 +6,9 @@ import "storage"
 // === Wallet-specific Constants and Types ===
 
 const SIZE_SIGNATURE = 512
+const STATUS_BLOCKED = 1
+const WALLET_MIN_BALANCE = ton("2.0")
+const WALLET_RESERVE_AMOUNT = ton("0.01")
 
 // External message struct (after signature)
 struct ExternalSignedMessage {
@@ -22,6 +25,11 @@ struct (0x9c69f376) OwnerWalletSendMessage {
     body: cell
 }
 
+// Text command actions
+const TEXT_ACTION_WITHDRAW = 119 // "w"
+const TEXT_ACTION_BLOCK = 98     // "b"
+const TEXT_ACTION_UNBLOCK = 117  // "u"
+
 // Text command markers (op == 0)
 struct (0x00000000) TextCommand {
     action: uint8
@@ -36,15 +44,15 @@ fun onExternalMessage(inMsg: slice) {
     val signature = inMsg.loadBits(SIZE_SIGNATURE);
     val msg = ExternalSignedMessage.fromSlice(inMsg);
 
-    assert (msg.validUntil > blockchain.now()) throw 1030;
+    assert (msg.validUntil > blockchain.now()) throw ERROR_WALLET_EXPIRED;
 
     var storage = WalletStorage.load();
 
-    assert (!(storage.status & 1)) throw 1031;  // Not blocked
-    assert (msg.msgSeqno == storage.seqno) throw 1032;
-    assert (msg.subwalletId == storage.subwalletId) throw 1033;
-    assert (isSignatureValid(inMsg.hash(), signature, storage.publicKey)) throw 1034;
-    assert (contract.getOriginalBalance() >= ton("2.0")) throw 1035;
+    assert (!(storage.status & STATUS_BLOCKED)) throw ERROR_WALLET_BLOCKED;
+    assert (msg.msgSeqno == storage.seqno) throw ERROR_WALLET_INVALID_SEQNO;
+    assert (msg.subwalletId == storage.subwalletId) throw ERROR_WALLET_INVALID_SUBWALLET;
+    assert (isSignatureValid(inMsg.hash(), signature, storage.publicKey)) throw ERROR_WALLET_BAD_SIGNATURE;
+    assert (contract.getOriginalBalance() >= WALLET_MIN_BALANCE) throw ERROR_WALLET_LOW_BALANCE;
 
     acceptExternalMessage();
 
@@ -56,7 +64,7 @@ fun onExternalMessage(inMsg: slice) {
     }
 
     // Update seqno
-    storage.seqno = storage.seqno + 1;
+    storage.seqno += 1;
     storage.save();
 }
 
@@ -77,7 +85,7 @@ fun onInternalMessage(in: InMessage) {
     var storage = lazy WalletStorage.load();
 
     // Only owner can send internal messages
-    assert (in.senderAddress == storage.ownerAddress) throw 1040;
+    assert (in.senderAddress == storage.ownerAddress) throw ERROR_WALLET_EXPECTED_OWNER;
 
     val msg = lazy AllowedInternalMessage.fromSlice(in.body);
 
@@ -88,31 +96,28 @@ fun onInternalMessage(in: InMessage) {
 
         TextCommand => {
             match (msg.action) {
-                119 => {
-                    // "w" - withdraw
-                    reserveToncoinsOnBalance(ton("0.01"), RESERVE_MODE_AT_MOST);  // Keep contract alive
+                TEXT_ACTION_WITHDRAW => {
+                    reserveToncoinsOnBalance(WALLET_RESERVE_AMOUNT, RESERVE_MODE_AT_MOST);  // Keep contract alive
 
                     createMessage({
                         bounce: BounceMode.Only256BitsOfBody,
                         dest: in.senderAddress,
                         value: 0,
                         body: TextCommand{
-                            action: 119
+                            action: TEXT_ACTION_WITHDRAW
                         }
                     }).send(SEND_MODE_CARRY_ALL_BALANCE);
                 },
-                98 => {
-                    // "b" - block
-                    storage.status = storage.status | 1;
+                TEXT_ACTION_BLOCK => {
+                    storage.status = storage.status | STATUS_BLOCKED;
                     storage.save();
                 },
-                117 => {
-                    // "u" - unblock
-                    storage.status = storage.status & 0xfffffffe;
+                TEXT_ACTION_UNBLOCK => {
+                    storage.status = storage.status & ~STATUS_BLOCKED;
                     storage.save();
-                }
+                },
                 else => {
-                   throw 1041;
+                    throw ERROR_WALLET_UNKNOWN_TEXT_OP;
                 }
             }
         }

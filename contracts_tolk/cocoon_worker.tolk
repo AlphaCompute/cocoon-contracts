@@ -23,13 +23,19 @@ type WorkerMessage = SignedWorkerMessage | OwnerWorkerRegister
 
 // === Message Handlers ===
 
-fun handleWorkerPayout(storage: WorkerStorage, signedMsg: SignedMessage, toLeaveOnBalance: coins, data: PayoutPayloadData, isLast: bool) {
+fun handleWorkerPayout(
+    storage: WorkerStorage,
+    signedMsg: SignedMessage,
+    toLeaveOnBalance: coins,
+    data: PayoutPayloadData,
+    isLast: bool
+) {
     assert (data.expectedMyAddress == contract.getAddress()) throw ERROR_EXPECTED_MY_ADDRESS;
 
     if (isLast) {
         assert (storage.tokens <= data.newTokens) throw ERROR_OLD_MESSAGE;
         reserveToncoinsOnBalance(STORAGE_ESTIMATE, RESERVE_MODE_EXACT_AMOUNT);
-        storage.state = worker_state_closed;
+        storage.state = WorkerState.Closed;
     } else {
         assert (storage.tokens < data.newTokens) throw ERROR_OLD_MESSAGE;
         reserveToncoinsOnBalance(toLeaveOnBalance, RESERVE_MODE_EXACT_AMOUNT);
@@ -94,7 +100,7 @@ fun onInternalMessage(in: InMessage) {
     }
 
     var storage = lazy WorkerStorage.load();
-    assert (storage.state != worker_state_closed) throw ERROR_CLOSED;
+    assert (storage.state != WorkerState.Closed) throw ERROR_CLOSED;
     assert (in.valueCoins > COMMISSION_ESTIMATE) throw ERROR_LOW_MSG_VALUE;
 
     val msg = lazy WorkerMessage.fromSlice(in.body);
@@ -132,13 +138,21 @@ fun onInternalMessage(in: InMessage) {
 
 // === Get Methods ===
 
-get fun get_cocoon_worker_data(): (address, address, int, int, int) {
-    var storage = WorkerStorage.load();
-    return (
-        storage.ownerAddress,
-        storage.proxyAddress,
-        storage.proxyPublicKey,
-        storage.state,
-        storage.tokens
-    );
+struct CocoonWorkerDataReply {
+    ownerAddress: address
+    proxyAddress: address
+    proxyPublicKey: uint256
+    state: WorkerState
+    tokens: uint64
+}
+
+get fun get_cocoon_worker_data(): CocoonWorkerDataReply {
+    val storage = WorkerStorage.load();
+    return {
+        ownerAddress: storage.ownerAddress,
+        proxyAddress: storage.proxyAddress,
+        proxyPublicKey: storage.proxyPublicKey,
+        state: storage.state,
+        tokens: storage.tokens,
+    };
 }

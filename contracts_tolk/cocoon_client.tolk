@@ -47,8 +47,12 @@ fun sendProxyRequestCarryAll(storage: ClientStorage, queryId: uint64, payload: c
     }).send(SEND_MODE_CARRY_ALL_BALANCE);
 }
 
-fun sendProxyRequestWithExcesses(storage: ClientStorage, queryId: uint64,
-    payload: cell?, sendExcessesTo: address) {
+fun sendProxyRequestWithExcesses(
+    storage: ClientStorage,
+    queryId: uint64,
+    payload: cell?,
+    sendExcessesTo: address
+) {
     val constData = storage.constDataRef.load();
 
     createMessage({
@@ -68,9 +72,12 @@ fun sendProxyRequestWithExcesses(storage: ClientStorage, queryId: uint64,
 
 // === Message Handlers ===
 
-fun ClientStorage.handleSignedClientMessage(mutate self, inBody: slice, inValueCoins: coins,
-    constData: ClientConstData, toLeaveOnBalance: coins) {
-    assert (COMMISSION_ESTIMATE <= inValueCoins) throw ERROR_LOW_MSG_VALUE;
+fun ClientStorage.handleSignedClientMessage(
+    mutate self,
+    inBody: slice,
+    constData: ClientConstData,
+    toLeaveOnBalance: coins
+) {
     assert (COMMISSION_ESTIMATE + toLeaveOnBalance <= contract.getOriginalBalance()) throw ERROR_LOW_SMC_BALANCE;
 
     val signedMsg = SignedMessage.fromSlice(inBody);
@@ -81,7 +88,7 @@ fun ClientStorage.handleSignedClientMessage(mutate self, inBody: slice, inValueC
 
     match (payload) {
         ChargePayload => {
-            assert (self.state != client_state_closed) throw ERROR_CLOSED;
+            assert (self.state != ClientState.Closed) throw ERROR_CLOSED;
             assert (self.tokensUsed < payload.newTokensUsed) throw ERROR_OLD_MESSAGE;
             assert (payload.expectedMyAddress == contract.getAddress()) throw ERROR_EXPECTED_MY_ADDRESS;
 
@@ -92,13 +99,13 @@ fun ClientStorage.handleSignedClientMessage(mutate self, inBody: slice, inValueC
             sendProxyRequestWithExcesses(self, payload.queryId, null, signedMsg.sendExcessesTo);
         },
         GrantRefundPayload => {
-            assert ((self.state != client_state_closed) | (self.balance != 0)) throw ERROR_CLOSED;
+            assert ((self.state != ClientState.Closed) | (self.balance != 0)) throw ERROR_CLOSED;
             assert (self.tokensUsed <= payload.newTokensUsed) throw ERROR_OLD_MESSAGE;
             assert (payload.expectedMyAddress == contract.getAddress()) throw ERROR_EXPECTED_MY_ADDRESS;
 
             self.updateBalance(payload.newTokensUsed);
 
-            self.state = client_state_closed;
+            self.state = ClientState.Closed;
             self.unlockTs = 0;
             val toRefund = self.balance;
             self.balance = 0;
@@ -134,25 +141,27 @@ fun onInternalMessage(in: InMessage) {
         return;
     }
 
+    assert (in.valueCoins >= COMMISSION_ESTIMATE) throw ERROR_LOW_MSG_VALUE;
+
     var storage = ClientStorage.load();
-    val constData = storage.constDataRef.load();
+    val constData = lazy storage.constDataRef.load();
 
     // Match on message type
     val msg = lazy ClientMessage.fromSlice(in.body);
 
     match (msg) {
         ExtClientChargeSigned => {
-            storage.handleSignedClientMessage(in.body, in.valueCoins, constData, toLeaveOnBalance);
+            storage.handleSignedClientMessage(in.body, constData, toLeaveOnBalance);
         },
         ExtClientGrantRefundSigned => {
-            storage.handleSignedClientMessage(in.body, in.valueCoins, constData, toLeaveOnBalance);
+            storage.handleSignedClientMessage(in.body, constData, toLeaveOnBalance);
         },
         ExtClientTopUp => {
-            assert (storage.state != client_state_closed) throw ERROR_CLOSED;
+            assert (storage.state != ClientState.Closed) throw ERROR_CLOSED;
             assert (msg.topUpAmount + COMMISSION_ESTIMATE <= in.valueCoins) throw ERROR_LOW_MSG_VALUE;
             assert (msg.topUpAmount + COMMISSION_ESTIMATE + toLeaveOnBalance <= contract.getOriginalBalance()) throw ERROR_LOW_SMC_BALANCE;
 
-            storage.balance = storage.balance + msg.topUpAmount;
+            storage.balance += msg.topUpAmount;
             reserveToncoinsOnBalance(toLeaveOnBalance, 0);
 
             sendProxyRequestCarryAll(
@@ -166,12 +175,12 @@ fun onInternalMessage(in: InMessage) {
         },
 
         OwnerClientChangeSecretHashAndTopUp => {
-            assert (storage.state != client_state_closed) throw ERROR_CLOSED;
+            assert (storage.state != ClientState.Closed) throw ERROR_CLOSED;
             assert (msg.topUpAmount + COMMISSION_ESTIMATE <= in.valueCoins) throw ERROR_LOW_MSG_VALUE;
             assert (msg.topUpAmount + COMMISSION_ESTIMATE + toLeaveOnBalance <= contract.getOriginalBalance()) throw ERROR_LOW_SMC_BALANCE;
             assert (in.senderAddress == constData.ownerAddress) throw ERROR_EXPECTED_MESSAGE_FROM_OWNER;
 
-            storage.balance = storage.balance + msg.topUpAmount;
+            storage.balance += msg.topUpAmount;
             storage.secretHash = msg.newSecretHash;
             reserveToncoinsOnBalance(toLeaveOnBalance, 0);
 
@@ -186,8 +195,7 @@ fun onInternalMessage(in: InMessage) {
         },
 
         OwnerClientRegister => {
-            assert (storage.state != client_state_closed) throw ERROR_CLOSED;
-            assert (COMMISSION_ESTIMATE <= in.valueCoins) throw ERROR_LOW_MSG_VALUE;
+            assert (storage.state != ClientState.Closed) throw ERROR_CLOSED;
             assert (COMMISSION_ESTIMATE + toLeaveOnBalance <= contract.getOriginalBalance()) throw ERROR_LOW_SMC_BALANCE;
             assert (in.senderAddress == constData.ownerAddress) throw ERROR_EXPECTED_MESSAGE_FROM_OWNER;
 
@@ -204,8 +212,7 @@ fun onInternalMessage(in: InMessage) {
         },
 
         OwnerClientChangeSecretHash => {
-            assert (storage.state != client_state_closed) throw ERROR_CLOSED;
-            assert (COMMISSION_ESTIMATE <= in.valueCoins) throw ERROR_LOW_MSG_VALUE;
+            assert (storage.state != ClientState.Closed) throw ERROR_CLOSED;
             assert (COMMISSION_ESTIMATE + toLeaveOnBalance <= contract.getOriginalBalance()) throw ERROR_LOW_SMC_BALANCE;
             assert (in.senderAddress == constData.ownerAddress) throw ERROR_EXPECTED_MESSAGE_FROM_OWNER;
 
@@ -216,8 +223,7 @@ fun onInternalMessage(in: InMessage) {
         },
 
         OwnerClientIncreaseStake => {
-            assert (storage.state != client_state_closed) throw ERROR_CLOSED;
-            assert (COMMISSION_ESTIMATE <= in.valueCoins) throw ERROR_LOW_MSG_VALUE;
+            assert (storage.state != ClientState.Closed) throw ERROR_CLOSED;
             assert (COMMISSION_ESTIMATE + toLeaveOnBalance <= contract.getOriginalBalance()) throw ERROR_LOW_SMC_BALANCE;
             assert (in.senderAddress == constData.ownerAddress) throw ERROR_EXPECTED_MESSAGE_FROM_OWNER;
             assert (msg.newStake > storage.stake) throw ERROR_LOW_MSG_VALUE;
@@ -229,8 +235,7 @@ fun onInternalMessage(in: InMessage) {
         },
 
         OwnerClientWithdraw => {
-            assert (storage.state == client_state_normal) throw ERROR_CLOSED;
-            assert (COMMISSION_ESTIMATE <= in.valueCoins) throw ERROR_LOW_MSG_VALUE;
+            assert (storage.state == ClientState.Normal) throw ERROR_CLOSED;
             assert (COMMISSION_ESTIMATE + toLeaveOnBalance <= contract.getOriginalBalance()) throw ERROR_LOW_SMC_BALANCE;
             assert (in.senderAddress == constData.ownerAddress) throw ERROR_EXPECTED_OWNER;
             assert (storage.balance > storage.stake) throw ERROR_LOW_SMC_BALANCE;
@@ -250,14 +255,13 @@ fun onInternalMessage(in: InMessage) {
         },
 
         OwnerClientRequestRefund => {
-            assert (storage.state != client_state_closed) throw ERROR_CLOSED;
-            assert (COMMISSION_ESTIMATE <= in.valueCoins) throw ERROR_LOW_MSG_VALUE;
+            assert (storage.state != ClientState.Closed) throw ERROR_CLOSED;
             assert (COMMISSION_ESTIMATE + toLeaveOnBalance <= contract.getOriginalBalance()) throw ERROR_LOW_SMC_BALANCE;
             assert (in.senderAddress == constData.ownerAddress) throw ERROR_EXPECTED_OWNER;
 
-            if (storage.state == client_state_normal) {
+            if (storage.state == ClientState.Normal) {
                 val params = storage.params.load();
-                storage.state = client_state_closing;
+                storage.state = ClientState.Closing;
                 storage.unlockTs = blockchain.now() + params.clientDelayBeforeClose;
 
                 reserveToncoinsOnBalance(toLeaveOnBalance, 0);
@@ -280,7 +284,7 @@ fun onInternalMessage(in: InMessage) {
             } else {
                 assert (storage.unlockTs < blockchain.now()) throw ERROR_NOT_UNLOCKED_YET;
 
-                storage.state = client_state_closed;
+                storage.state = ClientState.Closed;
                 val toRefund = storage.balance;
                 storage.balance = 0;
 
@@ -303,19 +307,31 @@ fun onInternalMessage(in: InMessage) {
 
 // === Get Methods ===
 
-get fun get_cocoon_client_data(): (address, address, int, int, int, int, int, int, int) {
+struct CocoonClientDataReply {
+    ownerAddress: address
+    proxyAddress: address
+    proxyPublicKey: uint256
+    state: ClientState
+    balance: coins
+    stake: coins
+    tokensUsed: uint64
+    unlockTs: uint32
+    secretHash: uint256
+}
+
+get fun get_cocoon_client_data(): CocoonClientDataReply {
     val storage = ClientStorage.load();
     val constData = storage.constDataRef.load();
 
-    return (
-        constData.ownerAddress,
-        constData.proxyAddress,
-        constData.proxyPublicKey,
-        storage.state,
-        storage.balance,
-        storage.stake,
-        storage.tokensUsed,
-        storage.unlockTs,
-        storage.secretHash
-    );
+    return {
+        ownerAddress: constData.ownerAddress,
+        proxyAddress: constData.proxyAddress,
+        proxyPublicKey: constData.proxyPublicKey,
+        state: storage.state,
+        balance: storage.balance,
+        stake: storage.stake,
+        tokensUsed: storage.tokensUsed,
+        unlockTs: storage.unlockTs,
+        secretHash: storage.secretHash,
+    };
 }

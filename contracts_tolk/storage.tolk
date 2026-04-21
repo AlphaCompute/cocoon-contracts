@@ -8,7 +8,6 @@ import "messages"
 const COMMISSION_ESTIMATE = ton("0.1")
 const STORAGE_ESTIMATE = ton("0.01")
 const CLIENT_STAKE = ton("1.0")
-const WORKCHAIN = 0
 
 // Send modes are already in stdlib:
 // SEND_MODE_PAY_FEES_SEPARATELY = 1
@@ -18,18 +17,24 @@ const WORKCHAIN = 0
 // === State Constants ===
 
 // Client states
-const client_state_normal = 0
-const client_state_closing = 1
-const client_state_closed = 2
+enum ClientState : uint2 {
+    Normal = 0,
+    Closing = 1,
+    Closed = 2
+}
 
 // Proxy states
-const proxy_state_normal = 0
-const proxy_state_closing = 1
-const proxy_state_closed = 2
+enum ProxyState : uint2 {
+    Normal = 0,
+    Closing = 1,
+    Closed = 2
+}
 
 // Worker states
-const worker_state_normal = 0
-const worker_state_closed = 2
+enum WorkerState : uint2 {
+    Normal = 0,
+    Closed = 2
+}
 
 // === CocoonParams Structure ===
 
@@ -72,11 +77,11 @@ fun CocoonParams.withoutCode(self): CocoonParams {
 // === Root Storage ===
 
 struct RootData {
-    proxyHashes: dict
-    registeredProxies: dict
+    proxyHashes: map<uint256, ()>
+    registeredProxies: map<uint32, slice>
     lastProxySeqno: uint32
-    workerHashes: dict
-    modelHashes: dict
+    workerHashes: map<uint256, ()>
+    modelHashes: map<uint256, ()>
 }
 
 struct RootStorage {
@@ -96,12 +101,14 @@ fun RootStorage.save(self) {
 
 // === Proxy Storage ===
 
+// SAFETY: Fixed fields take 824 bits, leaving 199 bits for balance + stake (coins).
+// Overflow requires both fields to encode >~1B TON each, which exceeds total TON supply (~5B).
 @overflow1023_policy("suppress")
 struct ProxyStorage {
     ownerAddress: address
     proxyPublicKey: uint256
     rootAddress: address
-    state: uint2
+    state: ProxyState
     balance: coins
     stake: coins
     unlockTs: uint32
@@ -122,7 +129,7 @@ struct WorkerStorage {
     ownerAddress: address
     proxyAddress: address
     proxyPublicKey: uint256
-    state: uint2
+    state: WorkerState
     tokens: uint64
     params: Cell<CocoonParams>  // Cell reference (CocoonParams is too large to inline)
 }
@@ -144,7 +151,7 @@ struct ClientConstData {
 }
 
 struct ClientStorage {
-    state: uint2
+    state: ClientState
     balance: coins
     stake: coins
     tokensUsed: uint64
@@ -182,11 +189,7 @@ fun ClientStorage.updateBalance(mutate self, newTokensUsed: uint64) {
     val balanceUpdate = tokens * p.pricePerToken;
 
     self.tokensUsed = newTokensUsed;
-    if (balanceUpdate < self.balance) {
-        self.balance = self.balance - balanceUpdate;
-    } else {
-        self.balance = 0;
-    }
+    self.balance = max(self.balance - balanceUpdate, 0);
 }
 
 

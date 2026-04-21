@@ -6,9 +6,13 @@ import "storage"
 
 // === Proxy-specific Message Types ===
 
+// Text command actions
+const TEXT_ACTION_CLOSE = 99     // "c"
+const TEXT_ACTION_WITHDRAW = 119 // "w"
+
 // Text command messages
 struct (0x00000000) TextCmd {
-    action: uint8  // 99 = "c", 119 = "w"
+    action: uint8
 }
 
 // Signed message payloads
@@ -43,22 +47,22 @@ type ProxyMessage =
 // === Helper Functions ===
 
 fun ProxyStorage.close(mutate self, queryId: uint64, sendExcessesTo: address, toLeaveOnBalance: coins) {
-    if (self.state == proxy_state_normal) {
+    if (self.state == ProxyState.Normal) {
         val params = self.params.load();
 
         reserveToncoinsOnBalance(toLeaveOnBalance, 0);
         sendExcesses(sendExcessesTo, queryId);
 
-        self.state = proxy_state_closing;
+        self.state = ProxyState.Closing;
         self.unlockTs = blockchain.now() + params.proxyDelayBeforeClose;
         // balance and stake remain unchanged
-    } else if (self.state == proxy_state_closing) {
+    } else if (self.state == ProxyState.Closing) {
         assert (blockchain.now() >= self.unlockTs) throw ERROR_NOT_UNLOCKED_YET;
 
         reserveToncoinsOnBalance(STORAGE_ESTIMATE, 0);
         sendPayout(self.ownerAddress, 0, queryId, SEND_MODE_CARRY_ALL_BALANCE);
 
-        self.state = proxy_state_closed;
+        self.state = ProxyState.Closed;
         self.unlockTs = 0;
         self.balance = 0;
         self.stake = 0;
@@ -79,13 +83,13 @@ fun ProxyStorage.handleSignedProxyMessage(mutate self, inBody: slice, inValueCoi
 
     match (payload) {
         CloseRequestPayload => {
-            assert (self.state == proxy_state_normal) throw ERROR_CLOSED;
+            assert (self.state == ProxyState.Normal) throw ERROR_CLOSED;
             assert (payload.expectedMyAddress == contract.getAddress()) throw ERROR_EXPECTED_MY_ADDRESS;
 
             self.close(signedMsg.queryId, signedMsg.sendExcessesTo, toLeaveOnBalance);
         },
         CloseCompleteRequestPayload => {
-            assert (self.state == proxy_state_closing) throw ERROR_CLOSED;
+            assert (self.state == ProxyState.Closing) throw ERROR_CLOSED;
             assert (payload.expectedMyAddress == contract.getAddress()) throw ERROR_EXPECTED_MY_ADDRESS;
 
             self.close(signedMsg.queryId, signedMsg.sendExcessesTo, toLeaveOnBalance);
@@ -108,7 +112,7 @@ fun ProxyStorage.handleWorkerProxyRequest(mutate self, msg: WorkerProxyRequest, 
             ownerAddress: msg.ownerAddress,
             proxyAddress: contract.getAddress(),
             proxyPublicKey: self.proxyPublicKey,
-            state: worker_state_normal,
+            state: WorkerState.Normal,
             tokens: 0,
             params: workerParams.toCell(),
         }.toCell()
@@ -120,8 +124,8 @@ fun ProxyStorage.handleWorkerProxyRequest(mutate self, msg: WorkerProxyRequest, 
 
     match (innerMsg) {
         WorkerProxyPayoutRequest => {
-            assert (self.state != proxy_state_closed) throw ERROR_CLOSED;
-            self.balance = self.balance + innerMsg.proxyPart;
+            assert (self.state != ProxyState.Closed) throw ERROR_CLOSED;
+            self.balance += innerMsg.proxyPart;
 
             reserveToncoinsOnBalance(toLeaveOnBalance - innerMsg.workerPart, 0);
             sendPayout(msg.ownerAddress, innerMsg.workerPart, msg.queryId, SEND_MODE_PAY_FEES_SEPARATELY);
@@ -142,7 +146,7 @@ fun ProxyStorage.handleClientProxyRequest(mutate self, msg: ClientProxyRequest, 
     val clientParams = params.withoutCode();
 
     val clientData = ClientStorage {
-        state: client_state_normal,
+        state: ClientState.Normal,
         balance: 0,
         stake: clientParams.minClientStake,
         tokensUsed: 0,
@@ -163,7 +167,7 @@ fun ProxyStorage.handleClientProxyRequest(mutate self, msg: ClientProxyRequest, 
 
     match (innerMsg) {
         ClientProxyTopUp => {
-            if (self.state == proxy_state_normal) {
+            if (self.state == ProxyState.Normal) {
                 reserveToncoinsOnBalance(toLeaveOnBalance + innerMsg.topUpCoins, 0);
             } else {
                 reserveToncoinsOnBalance(toLeaveOnBalance, 0);
@@ -176,7 +180,7 @@ fun ProxyStorage.handleClientProxyRequest(mutate self, msg: ClientProxyRequest, 
             return; // do not check, nothing to do here
         },
         ClientProxyRefundGranted => {
-            assert (self.state != proxy_state_closed) throw ERROR_CLOSED;
+            assert (self.state != ProxyState.Closed) throw ERROR_CLOSED;
 
             reserveToncoinsOnBalance(toLeaveOnBalance - innerMsg.coins, 0);
             sendPayout(msg.ownerAddress, innerMsg.coins, msg.queryId, SEND_MODE_PAY_FEES_SEPARATELY);
@@ -184,13 +188,10 @@ fun ProxyStorage.handleClientProxyRequest(mutate self, msg: ClientProxyRequest, 
             sendExcesses(innerMsg.sendExcessesTo, msg.queryId);
         },
         ClientProxyRefundForce => {
-            assert (self.state != proxy_state_closed) throw ERROR_CLOSED;
+            assert (self.state != ProxyState.Closed) throw ERROR_CLOSED;
 
-            var coinsToRefund = innerMsg.coins;
-            if (coinsToRefund > self.stake) {
-                coinsToRefund = self.stake;
-            }
-            self.stake = self.stake - coinsToRefund;
+            val coinsToRefund = min(innerMsg.coins, self.stake);
+            self.stake -= coinsToRefund;
 
             reserveToncoinsOnBalance(toLeaveOnBalance - coinsToRefund, 0);
             sendPayout(msg.ownerAddress, coinsToRefund, msg.queryId, SEND_MODE_PAY_FEES_SEPARATELY);
@@ -225,18 +226,16 @@ fun onInternalMessage(in: InMessage) {
     match (msg) {
         TextCmd => {
             match (msg.action) {
-                99 => {
-                    // "c" - close
+                TEXT_ACTION_CLOSE => {
                     assert (COMMISSION_ESTIMATE <= in.valueCoins) throw ERROR_LOW_MSG_VALUE;
-                    assert (storage.state == proxy_state_normal) throw ERROR_CLOSED;
+                    assert (storage.state == ProxyState.Normal) throw ERROR_CLOSED;
                     assert (in.senderAddress == storage.ownerAddress) throw ERROR_EXPECTED_MESSAGE_FROM_OWNER;
 
                     storage.close(0, storage.ownerAddress, toLeaveOnBalance);
                 },
-                119 => {
-                    // "w" - withdraw
+                TEXT_ACTION_WITHDRAW => {
                     assert (COMMISSION_ESTIMATE <= in.valueCoins) throw ERROR_LOW_MSG_VALUE;
-                    assert (storage.state != proxy_state_closed) throw ERROR_CLOSED;
+                    assert (storage.state != ProxyState.Closed) throw ERROR_CLOSED;
                     assert (in.senderAddress == storage.ownerAddress) throw ERROR_EXPECTED_MESSAGE_FROM_OWNER;
 
                     reserveToncoinsOnBalance(toLeaveOnBalance - storage.balance, 0);
@@ -251,7 +250,6 @@ fun onInternalMessage(in: InMessage) {
 
             storage.save();
             return;
-
         }
         ExtProxyCloseRequestSigned => {
             storage.handleSignedProxyMessage(in.body, in.valueCoins, toLeaveOnBalance, storage.proxyPublicKey);
@@ -267,7 +265,7 @@ fun onInternalMessage(in: InMessage) {
         },
         ExtProxyPayoutRequest => {
             assert (COMMISSION_ESTIMATE <= in.valueCoins) throw ERROR_LOW_MSG_VALUE;
-            assert (storage.state != proxy_state_closed) throw ERROR_CLOSED;
+            assert (storage.state != ProxyState.Closed) throw ERROR_CLOSED;
 
             reserveToncoinsOnBalance(toLeaveOnBalance - storage.balance, 0);
             sendPayout(storage.ownerAddress, storage.balance, msg.queryId, SEND_MODE_PAY_FEES_SEPARATELY);
@@ -276,17 +274,17 @@ fun onInternalMessage(in: InMessage) {
             sendExcesses(msg.sendExcessesTo, msg.queryId);
         },
         ExtProxyIncreaseStake => {
-            assert (COMMISSION_ESTIMATE + msg.grams <= in.valueCoins) throw ERROR_LOW_MSG_VALUE;
-            assert (storage.state != proxy_state_closed) throw ERROR_CLOSED;
+            assert (COMMISSION_ESTIMATE + msg.amount <= in.valueCoins) throw ERROR_LOW_MSG_VALUE;
+            assert (storage.state != ProxyState.Closed) throw ERROR_CLOSED;
 
-            storage.stake = storage.stake + msg.grams;
-            reserveToncoinsOnBalance(toLeaveOnBalance + msg.grams, 0);
+            storage.stake += msg.amount;
+            reserveToncoinsOnBalance(toLeaveOnBalance + msg.amount, 0);
 
             sendExcesses(msg.sendExcessesTo, msg.queryId);
         },
         OwnerProxyClose => {
             assert (COMMISSION_ESTIMATE <= in.valueCoins) throw ERROR_LOW_MSG_VALUE;
-            assert (storage.state == proxy_state_normal) throw ERROR_CLOSED;
+            assert (storage.state == ProxyState.Normal) throw ERROR_CLOSED;
             assert (in.senderAddress == storage.ownerAddress) throw ERROR_EXPECTED_MESSAGE_FROM_OWNER;
 
             storage.close(msg.queryId, msg.sendExcessesTo, toLeaveOnBalance);
@@ -298,21 +296,36 @@ fun onInternalMessage(in: InMessage) {
 
 // === Get Methods ===
 
-get fun get_cocoon_proxy_data(): (address, int, address, int, coins, coins, int, int, int, coins, coins, int) {
-    var storage = ProxyStorage.load();
+struct CocoonProxyDataReply {
+    ownerAddress: address
+    proxyPublicKey: uint256
+    rootAddress: address
+    state: ProxyState
+    balance: coins
+    stake: coins
+    unlockTs: uint32
+    pricePerToken: coins
+    workerFeePerToken: coins
+    minProxyStake: coins
+    minClientStake: coins
+    paramsVersion: uint32
+}
+
+get fun get_cocoon_proxy_data(): CocoonProxyDataReply {
+    val storage = ProxyStorage.load();
     val params = storage.params.load();
-    return (
-        storage.ownerAddress,
-        storage.proxyPublicKey,
-        storage.rootAddress,
-        storage.state,
-        storage.balance,
-        storage.stake,
-        storage.unlockTs,
-        params.pricePerToken,
-        params.workerFeePerToken,
-        params.minProxyStake,
-        params.minClientStake,
-        params.paramsVersion
-    );
+    return {
+        ownerAddress: storage.ownerAddress,
+        proxyPublicKey: storage.proxyPublicKey,
+        rootAddress: storage.rootAddress,
+        state: storage.state,
+        balance: storage.balance,
+        stake: storage.stake,
+        unlockTs: storage.unlockTs,
+        pricePerToken: params.pricePerToken,
+        workerFeePerToken: params.workerFeePerToken,
+        minProxyStake: params.minProxyStake,
+        minClientStake: params.minClientStake,
+        paramsVersion: params.paramsVersion,
+    };
 }

@@ -1,6 +1,7 @@
 // Common message structures for all Cocoon contracts
 
 import "errors"
+import "storage"
 
 // === Common Messages ===
 
@@ -17,7 +18,7 @@ struct (0xc59a7cd3) Payout {
 struct (0x4d725d2c) WorkerProxyRequest {
     queryId: uint64
     ownerAddress: address
-    state: uint2
+    state: WorkerState
     tokens: uint64
     payload: cell?
 }
@@ -31,7 +32,7 @@ struct (0x08e7d036) WorkerProxyPayoutRequest {
 // === Client <-> Proxy Messages ===
 
 struct ClientStateData {
-    state: uint2
+    state: ClientState
     balance: coins
     stake: coins
     tokensUsed: uint64
@@ -217,7 +218,7 @@ struct (0x7610e6eb) ExtProxyPayoutRequest {
 
 struct (0x9713f187) ExtProxyIncreaseStake {
     queryId: uint64
-    grams: coins
+    amount: coins
     sendExcessesTo: address
 }
 
@@ -293,8 +294,7 @@ struct (0xefd711e1) GrantRefundPayload {
 
 // === Helper Functions ===
 
-@inline
-fun sendExcesses(dest: address, queryId: int) {
+fun sendExcesses(dest: address, queryId: uint64) {
     createMessage({
         bounce: BounceMode.NoBounce,
         dest: dest,
@@ -305,13 +305,12 @@ fun sendExcesses(dest: address, queryId: int) {
     }).send(SEND_MODE_CARRY_ALL_BALANCE);
 }
 
-@inline
 fun sendPayout(dest: address, coins: coins, queryId: uint64, mode: int) {
     createMessage({
         bounce: BounceMode.NoBounce,
         dest: dest,
         value: coins,
-        body: Payout{
+        body: Payout {
             queryId: queryId
         }
     }).send(mode);

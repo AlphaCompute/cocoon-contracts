@@ -1,6 +1,5 @@
 
 import "@stdlib/gas-payments"
-import "@stdlib/tvm-dicts"
 import "opcodes"
 import "errors"
 import "messages"
@@ -59,6 +58,7 @@ fun onInternalMessage(in: InMessage) {
     val queryId = queryHeader.queryId;
 
     var storage = lazy RootStorage.load();
+    // Save before ChangeOwner may modify it — excesses go to the original owner
     val ownerAddress = storage.ownerAddress;
 
     // Only owner can perform operations
@@ -73,39 +73,39 @@ fun onInternalMessage(in: InMessage) {
 
     match (msg) {
         AddWorkerType => {
-            data.workerHashes.uDictSet(256, msg.workerHash, createEmptySlice());
+            data.workerHashes.set(msg.workerHash, ());
         },
 
         DelWorkerType => {
-            data.workerHashes.uDictDelete(256, msg.workerHash);
+            data.workerHashes.delete(msg.workerHash);
         },
 
         AddModelType => {
-            data.modelHashes.uDictSet(256, msg.modelHash, createEmptySlice());
+            data.modelHashes.set(msg.modelHash, ());
         },
 
         DelModelType => {
-            data.modelHashes.uDictDelete(256, msg.modelHash);
+            data.modelHashes.delete(msg.modelHash);
         },
 
         AddProxyType => {
-            data.proxyHashes.uDictSet(256, msg.proxyHash, createEmptySlice());
+            data.proxyHashes.set(msg.proxyHash, ());
         },
 
         DelProxyType => {
-            data.proxyHashes.uDictDelete(256, msg.proxyHash);
+            data.proxyHashes.delete(msg.proxyHash);
         },
 
         RegisterProxy => {
             // Validate and extract hash from proxyInfo
             validateProxyAddr(msg.proxyInfo);
 
-            data.lastProxySeqno = data.lastProxySeqno + 1;
-            data.registeredProxies.uDictSet(32, data.lastProxySeqno, msg.proxyInfo);
+            data.lastProxySeqno += 1;
+            data.registeredProxies.set(data.lastProxySeqno, msg.proxyInfo);
         },
 
         UnregisterProxy => {
-            data.registeredProxies.uDictDelete(32, msg.seqno);
+            data.registeredProxies.delete(msg.seqno);
         },
 
         UpdateProxy => {
@@ -113,21 +113,21 @@ fun onInternalMessage(in: InMessage) {
             validateProxyAddr(msg.proxyAddr);
 
             // Get existing entry and extract hash
-            val (value, found) = data.registeredProxies.uDictGet(32, msg.seqno);
-            assert (found) throw ERROR_UNKNOWN_PROXY_TYPE;
+            val r = data.registeredProxies.get(msg.seqno);
+            assert (r.isFound) throw ERROR_UNKNOWN_PROXY_TYPE;
 
             // Create new entry
-            data.registeredProxies.uDictSet(32, msg.seqno, msg.proxyAddr);
+            data.registeredProxies.set(msg.seqno, msg.proxyAddr);
         },
 
         ChangeFees => {
-            params.paramsVersion = params.paramsVersion + 1;
+            params.paramsVersion += 1;
             params.pricePerToken = msg.pricePerToken;
             params.workerFeePerToken = msg.workerFeePerToken;
         },
 
         ChangeParams => {
-            params.paramsVersion = params.paramsVersion + 1;
+            params.paramsVersion += 1;
             params.pricePerToken = msg.pricePerToken;
             params.workerFeePerToken = msg.workerFeePerToken;
             params.proxyDelayBeforeClose = msg.proxyDelayBeforeClose;
@@ -137,7 +137,7 @@ fun onInternalMessage(in: InMessage) {
         },
 
         UpgradeContracts => {
-            params.paramsVersion = params.paramsVersion + 1;
+            params.paramsVersion += 1;
             params.proxyScCode = msg.proxyCode;
             params.workerScCode = msg.workerCode;
             params.clientScCode = msg.clientCode;
@@ -150,11 +150,11 @@ fun onInternalMessage(in: InMessage) {
         },
 
         ResetRoot => {
-            // Reset all dictionaries to null
-            data.proxyHashes = null;
-            data.workerHashes = null;
-            data.modelHashes = null;
-            data.registeredProxies = null;
+            // Reset all maps
+            data.proxyHashes = [];
+            data.workerHashes = [];
+            data.modelHashes = [];
+            data.registeredProxies = [];
         },
 
         UpgradeFull => {
@@ -175,76 +175,103 @@ fun onInternalMessage(in: InMessage) {
     // Save updated data
     storage.data = data.toCell();
     storage.params = params.toCell();
-    storage.version = storage.version + 1;
+    storage.version += 1;
     storage.save();
 }
 
 // === Get Methods ===
 
 get fun last_proxy_seqno(): int {
-    var storage = RootStorage.load();
-    var data = storage.data.load();
+    val storage = RootStorage.load();
+    val data = storage.data.load();
     return data.lastProxySeqno;
 }
 
-get fun get_cocoon_data(): (int, int, int, int, int, int, int, int, int, slice) {
-    var storage = RootStorage.load();
-    var data = storage.data.load();
-    var params = storage.params.load();
-
-    return (
-        storage.version,
-        data.lastProxySeqno,
-        params.paramsVersion,
-        params.uniqueId,
-        params.isTest ? 1 : 0,
-        params.pricePerToken,
-        params.workerFeePerToken,
-        params.minProxyStake,
-        params.minClientStake,
-        storage.ownerAddress as slice
-    );
+struct CocoonDataReply {
+    version: uint32
+    lastProxySeqno: uint32
+    paramsVersion: uint32
+    uniqueId: uint32
+    isTest: int
+    pricePerToken: coins
+    workerFeePerToken: coins
+    minProxyStake: coins
+    minClientStake: coins
+    ownerAddress: slice
 }
 
-get fun get_cur_params(): (int, int, int, int, int, int, int, int, int, int, int, int, int, int) {
-    var storage = RootStorage.load();
-    var params = storage.params.load();
+get fun get_cocoon_data(): CocoonDataReply {
+    val storage = RootStorage.load();
+    val data = storage.data.load();
+    val params = storage.params.load();
 
-    return (
-        params.paramsVersion,
-        params.uniqueId,
-        params.isTest ? 1 : 0,
-        params.pricePerToken,
-        params.workerFeePerToken,
-        params.cachedTokensPriceMultiplier,
-        params.reasoningTokensPriceMultiplier,
-        params.proxyDelayBeforeClose,
-        params.clientDelayBeforeClose,
-        params.minProxyStake,
-        params.minClientStake,
-        params.proxyScCode != null ? params.proxyScCode!.hash() : 0,
-        params.workerScCode != null ? params.workerScCode!.hash() : 0,
-        params.clientScCode != null ? params.clientScCode!.hash() : 0
-    );
+    return {
+        version: storage.version,
+        lastProxySeqno: data.lastProxySeqno,
+        paramsVersion: params.paramsVersion,
+        uniqueId: params.uniqueId,
+        isTest: params.isTest ? 1 : 0,
+        pricePerToken: params.pricePerToken,
+        workerFeePerToken: params.workerFeePerToken,
+        minProxyStake: params.minProxyStake,
+        minClientStake: params.minClientStake,
+        ownerAddress: storage.ownerAddress as slice,
+    };
 }
 
-get fun proxy_hash_is_valid(hash: int): int {
-    var storage = RootStorage.load();
-    var data = storage.data.load();
-    val (_, found) = data.proxyHashes.uDictGet(256, hash);
-    return found ? -1 : 0;
+struct CocoonParamsReply {
+    paramsVersion: uint32
+    uniqueId: uint32
+    isTest: int
+    pricePerToken: coins
+    workerFeePerToken: coins
+    cachedTokensPriceMultiplier: uint32
+    reasoningTokensPriceMultiplier: uint32
+    proxyDelayBeforeClose: uint32
+    clientDelayBeforeClose: uint32
+    minProxyStake: coins
+    minClientStake: coins
+    proxyScCodeHash: uint256
+    workerScCodeHash: uint256
+    clientScCodeHash: uint256
 }
 
-get fun worker_hash_is_valid(hash: int): int {
-    var storage = RootStorage.load();
-    var data = storage.data.load();
-    val (_, found) = data.workerHashes.uDictGet(256, hash);
-    return found ? -1 : 0;
+get fun get_cur_params(): CocoonParamsReply {
+    val storage = RootStorage.load();
+    val params = storage.params.load();
+
+    return {
+        paramsVersion: params.paramsVersion,
+        uniqueId: params.uniqueId,
+        isTest: params.isTest ? 1 : 0,
+        pricePerToken: params.pricePerToken,
+        workerFeePerToken: params.workerFeePerToken,
+        cachedTokensPriceMultiplier: params.cachedTokensPriceMultiplier,
+        reasoningTokensPriceMultiplier: params.reasoningTokensPriceMultiplier,
+        proxyDelayBeforeClose: params.proxyDelayBeforeClose,
+        clientDelayBeforeClose: params.clientDelayBeforeClose,
+        minProxyStake: params.minProxyStake,
+        minClientStake: params.minClientStake,
+        proxyScCodeHash: params.proxyScCode != null ? params.proxyScCode!.hash() : 0,
+        workerScCodeHash: params.workerScCode != null ? params.workerScCode!.hash() : 0,
+        clientScCodeHash: params.clientScCode != null ? params.clientScCode!.hash() : 0,
+    };
 }
 
-get fun model_hash_is_valid(hash: int): int {
-    var storage = RootStorage.load();
-    var data = storage.data.load();
-    val (_, found) = data.modelHashes.uDictGet(256, hash);
-    return found ? -1 : 0;
+get fun proxy_hash_is_valid(hash: uint256): bool {
+    val storage = RootStorage.load();
+    val data = storage.data.load();
+    return data.proxyHashes.exists(hash);
+}
+
+get fun worker_hash_is_valid(hash: uint256): bool {
+    val storage = RootStorage.load();
+    val data = storage.data.load();
+    return data.workerHashes.exists(hash);
+}
+
+get fun model_hash_is_valid(hash: uint256): bool {
+    val storage = RootStorage.load();
+    val data = storage.data.load();
+    return data.modelHashes.exists(hash);
 }
