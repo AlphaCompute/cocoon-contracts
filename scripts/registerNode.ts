@@ -126,15 +126,30 @@ export async function run(_provider: NetworkProvider) {
 
     try {
         switch (op) {
-            case 'addWorkerType':
+            case 'addWorkerType': {
+                if (await cocoonRoot.getWorkerHashIsValid(hashBuf!)) {
+                    process.stdout.write(JSON.stringify({ ok: false, code: 'ALREADY_REGISTERED', error: 'worker type hash already registered on-chain' }) + '\n');
+                    process.exit(1);
+                }
                 await cocoonRoot.sendAddWorkerType(sender, hashBuf!);
                 break;
-            case 'addProxyType':
+            }
+            case 'addProxyType': {
+                if (await cocoonRoot.getProxyHashIsValid(hashBuf!)) {
+                    process.stdout.write(JSON.stringify({ ok: false, code: 'ALREADY_REGISTERED', error: 'proxy type hash already registered on-chain' }) + '\n');
+                    process.exit(1);
+                }
                 await cocoonRoot.sendAddProxyType(sender, hashBuf!);
                 break;
-            case 'addModelType':
+            }
+            case 'addModelType': {
+                if (await cocoonRoot.getModelHashIsValid(hashBuf!)) {
+                    process.stdout.write(JSON.stringify({ ok: false, code: 'ALREADY_REGISTERED', error: 'model type hash already registered on-chain' }) + '\n');
+                    process.exit(1);
+                }
                 await cocoonRoot.sendAddModelType(sender, hashBuf!);
                 break;
+            }
             case 'addProxyInfo': {
                 await cocoonRoot.sendAddProxyInfo(sender, valueStr!);
                 const assignedSeqno = await cocoonRoot.getLastProxySeqno();
